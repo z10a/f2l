@@ -1,0 +1,82 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  password  String?
+  role      String   @default("user") // "user" or "admin"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  streams   Stream[]
+}
+
+model Stream {
+  id          String    @id @default(cuid())
+  title       String
+  description String?
+  thumbnail   String?
+  categoryId  String?
+  published   Boolean   @default(false)
+  authorId    String
+  author      User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  servers     Server[]
+  playlistUrl String?   // Optional M3U playlist URL
+  playlists   Playlist[] // Reference to playlists created from this stream
+  ads         Ad[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Server {
+  id        String   @id @default(cuid())
+  streamId  String
+  stream    Stream   @relation(fields: [streamId], references: [id], onDelete: Cascade)
+  name      String   // e.g., "Server 1", "Server 2"
+  url       String   // m3u or m3u8 URL
+  priority  Int      @default(0) // Lower number = higher priority
+  channelId String?  // Channel ID from playlist (e.g., "AlJazeera", "MBC1")
+  channelName String?  // Channel name from playlist (e.g., "قناة الجزيرة")
+  channelLogo String?  // Channel logo URL from playlist
+  tvgId     String?  // TV guide ID from playlist
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Playlist {
+  id        String   @id @default(cuid())
+  streamId  String
+  stream    Stream   @relation(fields: [streamId], references: [id], onDelete: Cascade)
+  name      String   // Playlist name (e.g., "قائمة الرياضة")
+  url       String   // M3U playlist URL
+  channels  Int      @default(0) // Number of channels in playlist
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Ad {
+  id        String   @id @default(cuid())
+  streamId  String?
+  stream    Stream?  @relation(fields: [streamId], references: [id], onDelete: Cascade)
+  position  String   // "home-top", "home-bottom", "stream-top", "stream-bottom", "stream-sidebar"
+  title     String?
+  imageUrl  String
+  linkUrl   String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

@@ -1,0 +1,8 @@
+    playlists   Playlist[] // Reference to playlists created from this stream
+    ads         Ad[]
+    status       String   @default("unknown") // online, offline, unknown
+    statusCheckedAt DateTime? // Last time status was checked
+    quality      String? // hd, fhd, sd, 4k
+    createdAt   DateTime @default(now())
+    updatedAt   DateTime @updatedAt
+}
