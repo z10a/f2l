@@ -204,6 +204,8 @@
       "devtoolSegmentExplorer": false,
       "browserDebugInfoInTerminal": false,
       "optimizeRouterScrolling": false,
+      "strictNextHead": true,
+      "middlewareClientMaxBodySize": 10485760,
       "optimizePackageImports": [
         "lucide-react",
         "date-fns",
