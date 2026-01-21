@@ -593,11 +593,11 @@ export default function AdminDashboard() {
   ];
 
   const activityLogs = [
-    { id: 'log-1', action: 'تسجيل دخول', user: 'admin@f2l.com', time: 'منذ 5 دقائق' },
-    { id: 'log-2', action: 'تحديث قائمة', user: 'admin@f2l.com', time: 'منذ 20 دقيقة' },
+    { id: 'log-1', action: 'تسجيل دخول', user: 'dilerbarakad@gmail.com', time: 'منذ 5 دقائق' },
+    { id: 'log-2', action: 'تحديث قائمة', user: 'dilerbarakad@gmail.com', time: 'منذ 20 دقيقة' },
     { id: 'log-3', action: 'تعديل قناة', user: 'editor@f2l.com', time: 'منذ 45 دقيقة' },
-    { id: 'log-4', action: 'إضافة إعلان', user: 'admin@f2l.com', time: 'قبل ساعة' },
-    { id: 'log-5', action: 'تسجيل خروج', user: 'admin@f2l.com', time: 'قبل ساعتين' },
+    { id: 'log-4', action: 'إضافة إعلان', user: 'dilerbarakad@gmail.com', time: 'قبل ساعة' },
+    { id: 'log-5', action: 'تسجيل خروج', user: 'dilerbarakad@gmail.com', time: 'قبل ساعتين' },
   ];
 
   const uptimeStats = [
@@ -2886,7 +2886,7 @@ export default function AdminDashboard() {
                               onChange={(e) =>
                                 setRefreshForm({ ...refreshForm, notifyEmail: e.target.value })
                               }
-                              placeholder="admin@example.com"
+                              placeholder="dilerbarakad@gmail.com"
                               className="bg-slate-800 border-slate-700 text-white"
                             />
                           </div>
