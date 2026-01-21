@@ -1,0 +1,15 @@
+{
+  "/_not-found/page": "/_not-found",
+  "/api/admin/auth/route": "/api/admin/auth",
+  "/api/ads/route": "/api/ads",
+  "/api/playlists/parse/route": "/api/playlists/parse",
+  "/api/route": "/api",
+  "/api/servers/route": "/api/servers",
+  "/api/streams/[id]/route": "/api/streams/[id]",
+  "/api/streams/route": "/api/streams",
+  "/api/users/route": "/api/users",
+  "/admin-portal-secure-2025-x7k9m2/dashboard/page": "/admin-portal-secure-2025-x7k9m2/dashboard",
+  "/admin-portal-secure-2025-x7k9m2/page": "/admin-portal-secure-2025-x7k9m2",
+  "/page": "/",
+  "/stream/[id]/page": "/stream/[id]"
+}

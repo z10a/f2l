@@ -1,0 +1,15 @@
+{
+  "/_not-found/page": "app/_not-found/page.js",
+  "/api/admin/auth/route": "app/api/admin/auth/route.js",
+  "/api/ads/route": "app/api/ads/route.js",
+  "/api/playlists/parse/route": "app/api/playlists/parse/route.js",
+  "/api/route": "app/api/route.js",
+  "/api/servers/route": "app/api/servers/route.js",
+  "/api/streams/[id]/route": "app/api/streams/[id]/route.js",
+  "/api/streams/route": "app/api/streams/route.js",
+  "/api/users/route": "app/api/users/route.js",
+  "/admin-portal-secure-2025-x7k9m2/dashboard/page": "app/admin-portal-secure-2025-x7k9m2/dashboard/page.js",
+  "/admin-portal-secure-2025-x7k9m2/page": "app/admin-portal-secure-2025-x7k9m2/page.js",
+  "/page": "app/page.js",
+  "/stream/[id]/page": "app/stream/[id]/page.js"
+}
