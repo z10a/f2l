@@ -2,6 +2,10 @@
   "name": "nextjs_tailwind_shadcn_ts",
   "version": "0.1.0",
   "private": true,
+  "prisma": {
+  "seed": "node prisma/seed.js"
+  },
+
   "scripts": {
     "dev": "next dev -p 3000 2>&1 | tee dev.log",
     "build": "next build && cp -r .next/static .next/standalone/.next/ && cp -r public .next/standalone/",
