@@ -1,84 +1,11 @@
 {
   "version": 4,
-  "routes": {
-    "/admin-portal-secure-2025-x7k9m2": {
-      "experimentalBypassFor": [
-        {
-          "type": "header",
-          "key": "Next-Action"
-        },
-        {
-          "type": "header",
-          "key": "content-type",
-          "value": "multipart/form-data;.*"
-        }
-      ],
-      "initialRevalidateSeconds": false,
-      "srcRoute": "/admin-portal-secure-2025-x7k9m2",
-      "dataRoute": "/admin-portal-secure-2025-x7k9m2.rsc",
-      "allowHeader": [
-        "host",
-        "x-matched-path",
-        "x-prerender-revalidate",
-        "x-prerender-revalidate-if-generated",
-        "x-next-revalidated-tags",
-        "x-next-revalidate-tag-token"
-      ]
-    },
-    "/": {
-      "experimentalBypassFor": [
-        {
-          "type": "header",
-          "key": "Next-Action"
-        },
-        {
-          "type": "header",
-          "key": "content-type",
-          "value": "multipart/form-data;.*"
-        }
-      ],
-      "initialRevalidateSeconds": false,
-      "srcRoute": "/",
-      "dataRoute": "/index.rsc",
-      "allowHeader": [
-        "host",
-        "x-matched-path",
-        "x-prerender-revalidate",
-        "x-prerender-revalidate-if-generated",
-        "x-next-revalidated-tags",
-        "x-next-revalidate-tag-token"
-      ]
-    },
-    "/admin-portal-secure-2025-x7k9m2/dashboard": {
-      "experimentalBypassFor": [
-        {
-          "type": "header",
-          "key": "Next-Action"
-        },
-        {
-          "type": "header",
-          "key": "content-type",
-          "value": "multipart/form-data;.*"
-        }
-      ],
-      "initialRevalidateSeconds": false,
-      "srcRoute": "/admin-portal-secure-2025-x7k9m2/dashboard",
-      "dataRoute": "/admin-portal-secure-2025-x7k9m2/dashboard.rsc",
-      "allowHeader": [
-        "host",
-        "x-matched-path",
-        "x-prerender-revalidate",
-        "x-prerender-revalidate-if-generated",
-        "x-next-revalidated-tags",
-        "x-next-revalidate-tag-token"
-      ]
-    }
-  },
+  "routes": {},
   "dynamicRoutes": {},
   "notFoundRoutes": [],
   "preview": {
-    "previewModeId": "51411c3a59cbf475c8d27faad5cfa239",
-    "previewModeSigningKey": "5ce243a174abaa5a33df4851a46ed98ae64fe61648886afa79ebe5b8538d46e3",
-    "previewModeEncryptionKey": "14ac2b7f4a5bcd53453d8370130722f8f75fefbd5ed800c16602c6c5d987a36a"
+    "previewModeId": "193ac19d25b5671a4cf48df858e75031",
+    "previewModeSigningKey": "de3524ed9c2bd8de573d3d55b8ba44ff7b86584d39796922312c07e1c781b4d7",
+    "previewModeEncryptionKey": "2dccdb25c86eba5f98b0c2d13824982e6173f1694fe8578a94ad8d91cb3be55f"
   }
 }
