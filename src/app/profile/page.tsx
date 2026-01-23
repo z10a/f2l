@@ -344,6 +344,7 @@ export default function ProfilePage() {
         <div className="container mx-auto flex flex-wrap items-center justify-between gap-4 px-4 py-4">
           <div className="flex items-center gap-3">
             <UserCircle className="h-8 w-8" style={{ color: siteSettings?.primaryColor ?? '#dc2626' }} />
+            <UserCircle className="h-8 w-8 text-red-500" />
             <div>
               <h1 className="text-xl font-bold text-slate-900 dark:text-white">{labels.title}</h1>
               <p className="text-sm text-slate-500 dark:text-slate-400">{labels.subtitle}</p>
