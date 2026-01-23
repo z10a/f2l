@@ -1,69 +1,104 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 
-export async function GET(request: NextRequest) {
-  const { searchParams } = request.nextUrl.searchParams;
-  const ids = searchParams.get('ids');
-  
-  if (!ids || ids.split(',').filter(id => id.trim() === '').length === 0) {
-    return NextResponse.json({ error: 'No stream IDs provided' });
-  }
+type StatusResult = {
+  streamId: string;
+  status: 'working' | 'broken';
+  statusCode?: number;
+  error?: string;
+};
 
-  const streamIds = ids.split(',').map(id => id.trim());
-  
+const CHECK_TIMEOUT_MS = 8000;
+
+const checkUrl = async (url: string): Promise<{ status: 'working' | 'broken'; statusCode?: number; error?: string }> => {
   try {
-    const streams = await db.stream.findMany({
-      where: {
-        id: { in: streamIds }
-      }
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), CHECK_TIMEOUT_MS);
+
+    const response = await fetch(url, {
+      method: 'HEAD',
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; ChannelStatus/1.0)',
+      },
     });
 
-    // Check each stream's URL status
-    const results = await Promise.all(streams.map(async (stream) => {
-      try {
-        const response = await fetch(stream.url, {
-          method: 'HEAD',
-          mode: 'no-cors',
-          cache: 'no-store',
-          redirect: 'follow',
-          signal: AbortSignal.timeout(5000) // 5 second timeout
-        });
+    clearTimeout(timeoutId);
 
-        const isOnline = response.ok;
-        const lastCheckedAt = new Date();
-        const statusCheckedAt = new Date();
+    if (response.ok) {
+      return { status: 'working', statusCode: response.status };
+    }
 
-        // Add status to database (this is a temporary check)
-        if (stream.id) {
-          await db.stream.update({
-            where: { id: stream.id },
-            data: {
-              status: isOnline ? 'online' : 'offline',
-              statusCheckedAt: isOnline ? lastCheckedAt : statusCheckedAt
-            }
-          });
-        }
-
-        return {
-          id: stream.id,
-          status: isOnline ? 'online' : 'offline',
-          lastCheckedAt: isOnline ? lastCheckedAt.toISOString() : statusCheckedAt.toISOString()
-        };
-      } catch (error) {
-        console.error(`Error checking stream ${stream.id}:`, error);
-        return {
-          id: stream.id,
-          status: 'unknown',
-          lastCheckedAt: null
-        };
-      }
-    }));
-
-    const resultsWithStatus = await Promise.all(results);
-
-    return NextResponse.json({ results: resultsWithStatus });
+    return { status: 'broken', statusCode: response.status };
   } catch (error) {
-    console.error('Error checking streams:', error);
-    return NextResponse.json({ error: 'Failed to check streams' });
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), CHECK_TIMEOUT_MS);
+
+      const response = await fetch(url, {
+        method: 'GET',
+        signal: controller.signal,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; ChannelStatus/1.0)',
+        },
+      });
+
+      clearTimeout(timeoutId);
+
+      if (response.ok) {
+        return { status: 'working', statusCode: response.status };
+      }
+
+      return { status: 'broken', statusCode: response.status };
+    } catch (fallbackError) {
+      return {
+        status: 'broken',
+        error: fallbackError instanceof Error ? fallbackError.message : 'Connection failed',
+      };
+    }
+  }
+};
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const streamIds = Array.isArray(body.streamIds) ? body.streamIds : [];
+
+    if (streamIds.length === 0) {
+      return NextResponse.json({ error: 'No stream IDs provided' }, { status: 400 });
+    }
+
+    const streams = await db.stream.findMany({
+      where: { id: { in: streamIds } },
+      include: {
+        servers: {
+          orderBy: { priority: 'asc' },
+        },
+      },
+    });
+
+    const results: StatusResult[] = await Promise.all(
+      streams.map(async (stream) => {
+        const primaryServer = stream.servers[0];
+        if (!primaryServer?.url) {
+          return { streamId: stream.id, status: 'broken', error: 'No server URL' };
+        }
+        const check = await checkUrl(primaryServer.url);
+        return {
+          streamId: stream.id,
+          status: check.status,
+          statusCode: check.statusCode,
+          error: check.error,
+        };
+      })
+    );
+
+    return NextResponse.json({ results });
+  } catch (error) {
+    console.error('Error checking channel status:', error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Status check failed' },
+      { status: 500 }
+    );
   }
 }

@@ -5,12 +5,12 @@ async function main() {
 
   // Create admin user
   const admin = await db.user.upsert({
-    where: { email: 'admin@example.com' },
+    where: { email: 'dilerbarakad@gmail.com' },
     update: {},
     create: {
-      email: 'admin@example.com',
+      email: 'dilerbarakad@gmail.com',
       name: 'Admin User',
-      password: 'admin123', // In production, use hashed passwords
+      password: 'D1ff!cult-Str0ng-P@ssw0rd2025', // In production, use hashed passwords
       role: 'admin',
     },
   });
@@ -79,8 +79,8 @@ async function main() {
 
   console.log('Database seed completed successfully!');
   console.log('\n=== Admin Login Credentials ===');
-  console.log('Email: admin@example.com');
-  console.log('Password: admin123');
+  console.log('Email: dilerbarakad@gmail.com');
+  console.log('Password: D1ff!cult-Str0ng-P@ssw0rd2025');
   console.log('Admin Panel URL: /admin-portal-secure-2025-x7k9m2');
   console.log('================================\n');
 }
