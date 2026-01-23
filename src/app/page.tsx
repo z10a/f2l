@@ -878,6 +878,15 @@ export default function Home() {
     return aPinned ? -1 : 1;
   });
 
+  });
+
+  const sortedStreams = [...filteredStreams].sort((a, b) => {
+    const aPinned = pinnedStreams.has(a.id);
+    const bPinned = pinnedStreams.has(b.id);
+    if (aPinned === bPinned) return 0;
+    return aPinned ? -1 : 1;
+  });
+
   const aiRecommendations = useMemo(() => {
     const source = searchQuery.trim() ? filteredStreams : sortedStreams;
     const fallback = source.length > 0 ? source : streams;

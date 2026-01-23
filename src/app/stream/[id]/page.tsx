@@ -21,6 +21,8 @@ import {
   Activity,
   MessageCircle,
   Radio,
+  Moon,
+  Sun,
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -412,6 +414,44 @@ export default function StreamPage() {
       }
     }
   }, [streamId]);
+
+  useEffect(() => {
+    if (!streamId) return;
+    localStorage.setItem(`${CHAT_MESSAGES_KEY}:${streamId}`, JSON.stringify(chatMessages));
+  }, [chatMessages, streamId]);
+
+  useEffect(() => {
+    const storedLanguage = localStorage.getItem(UI_LANGUAGE_KEY);
+    if (storedLanguage === 'ar' || storedLanguage === 'en') {
+      setLanguage(storedLanguage);
+      return;
+    }
+    const detected = typeof navigator !== 'undefined' && navigator.language.toLowerCase().startsWith('en') ? 'en' : 'ar';
+    setLanguage(detected);
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(UI_LANGUAGE_KEY, language);
+    document.documentElement.dir = dir;
+  }, [dir, language]);
+
+  useEffect(() => {
+    const storedTheme = localStorage.getItem(UI_THEME_KEY);
+    if (storedTheme === 'light' || storedTheme === 'dark') {
+      setTheme(storedTheme);
+      return;
+    }
+    const prefersDark =
+      typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    setTheme(prefersDark ? 'dark' : 'light');
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(UI_THEME_KEY, theme);
+    document.documentElement.classList.toggle('dark', theme === 'dark');
+  }, [theme]);
+
+  useEffect(() => {
 
   useEffect(() => {
     if (!streamId) return;
@@ -1199,6 +1239,13 @@ export default function StreamPage() {
             <button
               type="button"
               onClick={() => setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))}
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 text-slate-600 hover:border-red-400 dark:border-slate-700 dark:text-slate-300"
+              aria-label={theme === 'dark' ? labels.themeToggleLight : labels.themeToggle}
+            >
+              {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+              <span className="sr-only">
+                {theme === 'dark' ? labels.themeToggleLight : labels.themeToggle}
+              </span>
               className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-red-400 dark:border-slate-700 dark:text-slate-300"
             >
               {theme === 'dark' ? labels.themeToggleLight : labels.themeToggle}
