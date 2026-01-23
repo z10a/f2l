@@ -20,6 +20,12 @@ export interface StreamQuality {
  * Quality tiers with associated metadata
  */
 const QUALITY_TIERS = {
+  Unknown: {
+    level: 'Unknown' as const,
+    label: 'Unknown',
+    color: 'bg-slate-400 text-white',
+    icon: '❔',
+  },
   SD: {
     level: 'SD' as const,
     label: 'SD',
@@ -74,22 +80,26 @@ export function detectQualityFromUrl(url: string): QualityInfo {
   const urlLower = url.toLowerCase();
 
   // Check for 4K patterns first (highest priority)
-  if (RESOLUTION_PATTERNS.some(p => urlLower.includes(p.pattern))) {
+  if (RESOLUTION_PATTERNS.filter(pattern => pattern.quality === '4K')
+    .some(pattern => pattern.pattern.test(urlLower))) {
     return QUALITY_TIERS['4K'];
   }
 
   // Check for FHD patterns
-  if (RESOLUTION_PATTERNS.slice(0, 4).some(p => urlLower.includes(p.pattern))) {
+  if (RESOLUTION_PATTERNS.filter(pattern => pattern.quality === 'FHD')
+    .some(pattern => pattern.pattern.test(urlLower))) {
     return QUALITY_TIERS.FHD;
   }
 
   // Check for HD patterns
-  if (RESOLUTION_PATTERNS.slice(4, 8).some(p => urlLower.includes(p.pattern))) {
+  if (RESOLUTION_PATTERNS.filter(pattern => pattern.quality === 'HD')
+    .some(pattern => pattern.pattern.test(urlLower))) {
     return QUALITY_TIERS.HD;
   }
 
   // Check for SD patterns
-  if (RESOLUTION_PATTERNS.slice(8).some(p => urlLower.includes(p.pattern))) {
+  if (RESOLUTION_PATTERNS.filter(pattern => pattern.quality === 'SD')
+    .some(pattern => pattern.pattern.test(urlLower))) {
     return QUALITY_TIERS.SD;
   }
 

@@ -121,6 +121,7 @@ const COUNTRY_KEYWORDS: Record<string, string[]> = {
 const UI_LANGUAGE_KEY = 'uiLanguage';
 const UI_THEME_KEY = 'uiTheme';
 const USER_PROFILE_KEY = 'userProfile';
+const WEBSITE_SETTINGS_KEY = 'websiteSettings';
 
 const UI_COPY = {
   ar: {
@@ -387,6 +388,14 @@ export default function Home() {
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [profileAvatar, setProfileAvatar] = useState<string | null>(null);
   const [profileName, setProfileName] = useState('');
+  const [profileEmail, setProfileEmail] = useState('');
+  const [siteSettings, setSiteSettings] = useState<{
+    title?: string;
+    faviconUrl?: string;
+    primaryColor?: string;
+    fontName?: string;
+    fontUrl?: string;
+  } | null>(null);
   const [offlineEnabled, setOfflineEnabled] = useState(false);
   const [showCachedOnly, setShowCachedOnly] = useState(false);
   const [cachedStreams, setCachedStreams] = useState<Stream[]>([]);
@@ -641,6 +650,11 @@ export default function Home() {
     const storedProfile = localStorage.getItem(USER_PROFILE_KEY);
     if (storedProfile) {
       try {
+        const parsed = JSON.parse(storedProfile) as {
+          displayName?: string;
+          avatarDataUrl?: string | null;
+          email?: string;
+        };
         const parsed = JSON.parse(storedProfile) as { displayName?: string; avatarDataUrl?: string | null };
         if (typeof parsed.displayName === 'string') {
           setProfileName(parsed.displayName);
@@ -648,9 +662,66 @@ export default function Home() {
         if (typeof parsed.avatarDataUrl === 'string') {
           setProfileAvatar(parsed.avatarDataUrl);
         }
+        if (typeof parsed.email === 'string') {
+          setProfileEmail(parsed.email);
+        }
       } catch (error) {
         console.error('Failed to parse user profile:', error);
       }
+    }
+  }, []);
+
+  useEffect(() => {
+    const storedSettings = localStorage.getItem(WEBSITE_SETTINGS_KEY);
+    if (!storedSettings) return;
+    try {
+      const parsed = JSON.parse(storedSettings) as {
+        title?: string;
+        faviconUrl?: string;
+        primaryColor?: string;
+        fontName?: string;
+        fontUrl?: string;
+      };
+      setSiteSettings(parsed);
+      if (parsed.title) {
+        document.title = parsed.title;
+      }
+      if (parsed.primaryColor) {
+        document.documentElement.style.setProperty('--brand-color', parsed.primaryColor);
+      }
+      if (parsed.fontName) {
+        document.documentElement.style.fontFamily = `${parsed.fontName}, ui-sans-serif, system-ui`;
+      }
+      if (parsed.fontUrl) {
+        const fontStyleId = 'custom-font-style';
+        let styleTag = document.getElementById(fontStyleId) as HTMLStyleElement | null;
+        if (!styleTag) {
+          styleTag = document.createElement('style');
+          styleTag.id = fontStyleId;
+          document.head.appendChild(styleTag);
+        }
+        const fontName = parsed.fontName || 'CustomFont';
+        styleTag.textContent = `
+@font-face {
+  font-family: '${fontName}';
+  src: url('${parsed.fontUrl}');
+  font-display: swap;
+}
+`;
+      }
+      if (parsed.faviconUrl) {
+        const faviconId = 'site-favicon';
+        let link = document.getElementById(faviconId) as HTMLLinkElement | null;
+        if (!link) {
+          link = document.createElement('link');
+          link.id = faviconId;
+          link.rel = 'icon';
+          document.head.appendChild(link);
+        }
+        link.href = parsed.faviconUrl;
+      }
+    } catch (error) {
+      console.error('Failed to parse site settings:', error);
     }
   }, []);
 
@@ -1163,15 +1234,56 @@ export default function Home() {
       {/* Header */}
       <header className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 sticky top-0 z-50 shadow-sm">
         <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="bg-gradient-to-br from-red-500 to-red-700 p-3 rounded-xl">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex flex-wrap items-center gap-3">
+              <div
+                className="rounded-xl p-3"
+                style={{ backgroundColor: siteSettings?.primaryColor ?? '#dc2626' }}
+              >
                 <Tv className="h-6 w-6 text-white" />
               </div>
+              <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
+                {siteSettings?.title ?? labels.title}
               <h1 className="text-2xl font-bold bg-gradient-to-r from-red-600 to-red-800 bg-clip-text text-transparent">
                 {labels.title}
               </h1>
+              <div className="text-xs text-slate-600 dark:text-slate-400">
+                {labels.available(filteredStreams.length)}
+              </div>
             </div>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              {profileEmail ? (
+                <Link
+                  href="/profile"
+                  className="flex items-center gap-2 rounded-full border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-600 hover:border-red-400 dark:border-slate-700 dark:text-slate-300"
+                  aria-label={labels.profile}
+                >
+                  <span className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                    {profileAvatar ? (
+                      <img src={profileAvatar} alt={profileName || labels.profile} className="h-full w-full object-cover" />
+                    ) : (
+                      <UserCircle className="h-4 w-4" />
+                    )}
+                  </span>
+                  <span className="hidden sm:inline">{profileName || labels.profile}</span>
+                </Link>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <Link
+                    href="/login"
+                    className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-red-400 dark:border-slate-700 dark:text-slate-300"
+                  >
+                    {language === 'ar' ? 'تسجيل الدخول' : 'Login'}
+                  </Link>
+                  <Link
+                    href="/register"
+                    className="rounded-full bg-red-600 px-3 py-1 text-xs font-semibold text-white hover:bg-red-700"
+                    style={{ backgroundColor: siteSettings?.primaryColor ?? '#dc2626' }}
+                  >
+                    {language === 'ar' ? 'إنشاء حساب' : 'Register'}
+                  </Link>
+                </div>
+              )}
             <div className="flex items-center gap-3">
               <div className="text-sm text-slate-600 dark:text-slate-400">
                 {labels.available(filteredStreams.length)}
@@ -1895,6 +2007,7 @@ export default function Home() {
                 {labels.profileRecommendations}
               </p>
               <Link
+                href={profileEmail ? '/profile' : '/register'}
                 href="/profile"
                 className="rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:border-red-400 hover:text-red-600 dark:border-slate-700 dark:text-slate-300"
               >

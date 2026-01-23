@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { AtSign, Eye, EyeOff, ShieldCheck, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -55,6 +56,7 @@ const COPY = {
 } as const;
 
 export default function RegisterPage() {
+  const router = useRouter();
   const [language, setLanguage] = useState<'ar' | 'en'>(() => {
     if (typeof window === 'undefined') return 'ar';
     const stored = localStorage.getItem(UI_LANGUAGE_KEY);
@@ -63,6 +65,10 @@ export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
 
   const labels = useMemo(() => COPY[language], [language]);
   const dir = language === 'ar' ? 'rtl' : 'ltr';
@@ -94,6 +100,13 @@ export default function RegisterPage() {
                 <Label htmlFor="name">{labels.name}</Label>
                 <div className="relative">
                   <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <Input
+                    id="name"
+                    placeholder={language === 'ar' ? 'أحمد علي' : 'Jane Doe'}
+                    className="pl-9"
+                    value={name}
+                    onChange={(event) => setName(event.target.value)}
+                  />
                   <Input id="name" placeholder={language === 'ar' ? 'أحمد علي' : 'Jane Doe'} className="pl-9" />
                 </div>
               </div>
@@ -101,6 +114,14 @@ export default function RegisterPage() {
                 <Label htmlFor="email">{labels.email}</Label>
                 <div className="relative">
                   <AtSign className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="name@email.com"
+                    className="pl-9"
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                  />
                   <Input id="email" type="email" placeholder="name@email.com" className="pl-9" />
                 </div>
               </div>
@@ -115,6 +136,8 @@ export default function RegisterPage() {
                     type={showPassword ? 'text' : 'password'}
                     placeholder="••••••••"
                     className="pr-16"
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
                   />
                   <button
                     type="button"
@@ -134,6 +157,8 @@ export default function RegisterPage() {
                     type={showConfirm ? 'text' : 'password'}
                     placeholder="••••••••"
                     className="pr-16"
+                    value={confirmPassword}
+                    onChange={(event) => setConfirmPassword(event.target.value)}
                   />
                   <button
                     type="button"
@@ -152,6 +177,23 @@ export default function RegisterPage() {
               <span>{labels.agree}</span>
             </label>
 
+            <Button
+              className="w-full"
+              size="lg"
+              disabled={!acceptedTerms || !email.trim() || password !== confirmPassword}
+              onClick={() => {
+                if (!email.trim() || password !== confirmPassword) return;
+                const displayName = name.trim() || email.split('@')[0] || (language === 'ar' ? 'مستخدم' : 'User');
+                localStorage.setItem(
+                  'userProfile',
+                  JSON.stringify({
+                    displayName,
+                    email: email.trim(),
+                  })
+                );
+                router.push('/profile');
+              }}
+            >
             <Button className="w-full" size="lg" disabled={!acceptedTerms}>
               {labels.register}
             </Button>

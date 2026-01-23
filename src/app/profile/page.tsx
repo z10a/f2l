@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Heart, History, Languages, Moon, Sun, UserCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -32,6 +33,7 @@ const UI_LANGUAGE_KEY = 'uiLanguage';
 const UI_THEME_KEY = 'uiTheme';
 const RECENTLY_WATCHED_KEY = 'recentlyWatchedStreams';
 const USER_PROFILE_KEY = 'userProfile';
+const WEBSITE_SETTINGS_KEY = 'websiteSettings';
 
 const COPY = {
   ar: {
@@ -97,6 +99,7 @@ const COPY = {
 } as const;
 
 export default function ProfilePage() {
+  const router = useRouter();
   const [language, setLanguage] = useState<'ar' | 'en'>('ar');
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [streams, setStreams] = useState<Stream[]>([]);
@@ -105,6 +108,13 @@ export default function ProfilePage() {
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
   const [avatarDataUrl, setAvatarDataUrl] = useState<string | null>(null);
+  const [siteSettings, setSiteSettings] = useState<{
+    title?: string;
+    faviconUrl?: string;
+    primaryColor?: string;
+    fontName?: string;
+    fontUrl?: string;
+  } | null>(null);
 
   const labels = useMemo(() => COPY[language], [language]);
   const dir = language === 'ar' ? 'rtl' : 'ltr';
@@ -136,6 +146,13 @@ export default function ProfilePage() {
     localStorage.setItem(UI_THEME_KEY, theme);
     document.documentElement.classList.toggle('dark', theme === 'dark');
   }, [theme]);
+
+  useEffect(() => {
+    const storedProfile = localStorage.getItem(USER_PROFILE_KEY);
+    if (!storedProfile) {
+      router.replace('/register');
+    }
+  }, [router]);
 
   useEffect(() => {
     const storedHistory = localStorage.getItem(RECENTLY_WATCHED_KEY);
@@ -172,6 +189,60 @@ export default function ProfilePage() {
       } catch (error) {
         console.error('Failed to parse user profile:', error);
       }
+    }
+  }, []);
+
+  useEffect(() => {
+    const storedSettings = localStorage.getItem(WEBSITE_SETTINGS_KEY);
+    if (!storedSettings) return;
+    try {
+      const parsed = JSON.parse(storedSettings) as {
+        title?: string;
+        faviconUrl?: string;
+        primaryColor?: string;
+        fontName?: string;
+        fontUrl?: string;
+      };
+      setSiteSettings(parsed);
+      if (parsed.title) {
+        document.title = parsed.title;
+      }
+      if (parsed.primaryColor) {
+        document.documentElement.style.setProperty('--brand-color', parsed.primaryColor);
+      }
+      if (parsed.fontName) {
+        document.documentElement.style.fontFamily = `${parsed.fontName}, ui-sans-serif, system-ui`;
+      }
+      if (parsed.fontUrl) {
+        const fontStyleId = 'custom-font-style';
+        let styleTag = document.getElementById(fontStyleId) as HTMLStyleElement | null;
+        if (!styleTag) {
+          styleTag = document.createElement('style');
+          styleTag.id = fontStyleId;
+          document.head.appendChild(styleTag);
+        }
+        const fontName = parsed.fontName || 'CustomFont';
+        styleTag.textContent = `
+@font-face {
+  font-family: '${fontName}';
+  src: url('${parsed.fontUrl}');
+  font-display: swap;
+}
+`;
+      }
+      if (parsed.faviconUrl) {
+        const faviconId = 'site-favicon';
+        let link = document.getElementById(faviconId) as HTMLLinkElement | null;
+        if (!link) {
+          link = document.createElement('link');
+          link.id = faviconId;
+          link.rel = 'icon';
+          document.head.appendChild(link);
+        }
+        link.href = parsed.faviconUrl;
+      }
+    } catch (error) {
+      console.error('Failed to parse site settings:', error);
     }
   }, []);
 
@@ -272,6 +343,7 @@ export default function ProfilePage() {
       <header className="border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
         <div className="container mx-auto flex flex-wrap items-center justify-between gap-4 px-4 py-4">
           <div className="flex items-center gap-3">
+            <UserCircle className="h-8 w-8" style={{ color: siteSettings?.primaryColor ?? '#dc2626' }} />
             <UserCircle className="h-8 w-8 text-red-500" />
             <div>
               <h1 className="text-xl font-bold text-slate-900 dark:text-white">{labels.title}</h1>

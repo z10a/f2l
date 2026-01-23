@@ -7,6 +7,7 @@ Below is a focused list of **required/likely** changes before publishing this ap
 - **Where to edit:**
   - Deployment environment variables (not in repo).
   - Prisma schema shows the dependency: `prisma/schema.prisma` (datasource `url = env("DATABASE_URL")`).
+- **Important:** The provider is `postgresql`, so the value must start with `postgresql://` or `postgres://`.
 
 ## 2) Replace hard-coded seed admin credentials (required for production safety)
 - **Why:** The seed scripts currently create a hard-coded admin account meant for development only.
@@ -47,3 +48,9 @@ Below is a focused list of **required/likely** changes before publishing this ap
 - **Where to edit:**
   - Deployment environment variables (not in repo)
   - `next.config.ts` if you add runtime config
+
+## 8) Keep secrets out of git (required)
+- **Why:** `.env` files can contain secrets and should not be committed.
+- **Where to edit:**
+  - Use `.env.example` as a template for developers.
+  - Add real values in your deployment environment variables (not in repo).
