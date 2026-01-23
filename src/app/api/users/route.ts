@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { email, name, password, role } = body;
+    const { email, name, password, role, theme } = body;
 
     // Check if user already exists
     const existingUser = await db.user.findUnique({
@@ -41,7 +41,8 @@ export async function POST(request: NextRequest) {
         email,
         name,
         password,
-        role: role || 'user'
+        role: role || 'user',
+        theme: theme || 'light'
       }
     });
 
@@ -59,7 +60,7 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json();
-    const { id, email, name, password, role } = body;
+    const { id, email, name, password, role, theme } = body;
 
     const user = await db.user.update({
       where: { id },
@@ -67,7 +68,8 @@ export async function PUT(request: NextRequest) {
         email,
         name,
         password,
-        role
+        role,
+        theme
       }
     });
 
