@@ -96,6 +96,7 @@ export default function LoginPage() {
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
                 />
+                <Input id="email" type="email" placeholder="name@email.com" className="pl-9" />
               </div>
             </div>
 
@@ -141,6 +142,7 @@ export default function LoginPage() {
                 router.push('/profile');
               }}
             >
+            <Button className="w-full" size="lg">
               {labels.login}
             </Button>
 
