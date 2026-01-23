@@ -283,6 +283,13 @@ export default function StreamPage() {
     quickActions: true,
     liveChat: true,
     webRtc: true,
+    streamPerformance: true,
+    streamRatings: true,
+    streamSharing: true,
+    streamEpg: true,
+    streamShortcuts: true,
+    streamPip: true,
+    streamServerSelect: true,
   });
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
@@ -1155,7 +1162,7 @@ export default function StreamPage() {
               </CardHeader>
               <CardContent>
                 {/* Server Selector */}
-                {stream.servers.length > 1 && (
+                {featureFlags.streamServerSelect && stream.servers.length > 1 && (
                   <div className="mb-4 flex items-center gap-3">
                     <Server className="h-5 w-5 text-slate-600 dark:text-slate-400" />
                     <Select
@@ -1190,16 +1197,18 @@ export default function StreamPage() {
                 )}
 
                 <div className="mb-4 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500 dark:text-slate-400">
-                  <span>{labels.shortcuts}</span>
+                  {featureFlags.streamShortcuts && <span>{labels.shortcuts}</span>}
                   <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={togglePictureInPicture}
-                      className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-red-400 dark:border-slate-700 dark:text-slate-300"
-                    >
-                      <PictureInPicture2 className="h-4 w-4" />
-                      {pipActive ? labels.pipOff : labels.pipOn}
-                    </button>
+                    {featureFlags.streamPip && (
+                      <button
+                        type="button"
+                        onClick={togglePictureInPicture}
+                        className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-red-400 dark:border-slate-700 dark:text-slate-300"
+                      >
+                        <PictureInPicture2 className="h-4 w-4" />
+                        {pipActive ? labels.pipOff : labels.pipOn}
+                      </button>
+                    )}
                     {featureFlags.webRtc && (
                       <button
                         type="button"
@@ -1279,85 +1288,87 @@ export default function StreamPage() {
               </CardContent>
             </Card>
 
-            <Card className="mt-6 border-2 border-slate-200 dark:border-slate-800">
-              <CardHeader>
-                <div className="flex items-center gap-2">
-                  <Gauge className="h-5 w-5 text-slate-500" />
-                  <CardTitle className="text-xl text-slate-800 dark:text-slate-100">
-                    {labels.performanceTitle}
-                  </CardTitle>
-                </div>
-                <CardDescription>{labels.performanceSubtitle}</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950">
-                    <div className="flex items-center gap-2 text-xs text-slate-500">
-                      <Timer className="h-4 w-4" />
-                      {labels.performanceLoadTime}
+            {featureFlags.streamPerformance && (
+              <Card className="mt-6 border-2 border-slate-200 dark:border-slate-800">
+                <CardHeader>
+                  <div className="flex items-center gap-2">
+                    <Gauge className="h-5 w-5 text-slate-500" />
+                    <CardTitle className="text-xl text-slate-800 dark:text-slate-100">
+                      {labels.performanceTitle}
+                    </CardTitle>
+                  </div>
+                  <CardDescription>{labels.performanceSubtitle}</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950">
+                      <div className="flex items-center gap-2 text-xs text-slate-500">
+                        <Timer className="h-4 w-4" />
+                        {labels.performanceLoadTime}
+                      </div>
+                      <p className="mt-2 text-lg font-semibold text-slate-800 dark:text-slate-100">
+                        {pageLoadMs ? labels.performanceMs(pageLoadMs) : '—'}
+                      </p>
                     </div>
-                    <p className="mt-2 text-lg font-semibold text-slate-800 dark:text-slate-100">
-                      {pageLoadMs ? labels.performanceMs(pageLoadMs) : '—'}
-                    </p>
+
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950">
+                      <div className="flex items-center gap-2 text-xs text-slate-500">
+                        <LineChart className="h-4 w-4" />
+                        {labels.performanceStreamQuality}
+                      </div>
+                      <p className="mt-2 text-lg font-semibold text-slate-800 dark:text-slate-100">
+                        {activeQuality.label}
+                      </p>
+                    </div>
+
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950">
+                      <div className="flex items-center justify-between text-xs text-slate-500">
+                        <span className="flex items-center gap-2">
+                          <Zap className="h-4 w-4" />
+                          {labels.performanceConnection}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={runSpeedTest}
+                          disabled={speedTestRunning}
+                          className="text-xs font-semibold text-red-500 hover:text-red-600 disabled:opacity-50"
+                        >
+                          {speedTestRunning ? '...' : labels.performanceTest}
+                        </button>
+                      </div>
+                      <p className="mt-2 text-lg font-semibold text-slate-800 dark:text-slate-100">
+                        {connectionKbps ? labels.performanceKbps(connectionKbps) : '—'}
+                      </p>
+                    </div>
+
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950">
+                      <div className="flex items-center gap-2 text-xs text-slate-500">
+                        <HardDrive className="h-4 w-4" />
+                        {labels.performanceCacheStatus}
+                      </div>
+                      <p className="mt-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
+                        {cacheEnabled ? labels.performanceCacheEnabled : labels.performanceCacheDisabled}
+                      </p>
+                      <p className="text-xs text-slate-500">{cachedStreamsCount}</p>
+                    </div>
                   </div>
 
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950">
-                    <div className="flex items-center gap-2 text-xs text-slate-500">
-                      <LineChart className="h-4 w-4" />
-                      {labels.performanceStreamQuality}
+                  <div className="mt-4 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm dark:border-slate-800 dark:bg-slate-950">
+                    <div className="flex items-center gap-2 text-slate-600 dark:text-slate-300">
+                      <Activity className="h-4 w-4" />
+                      {labels.performanceOptimize}
                     </div>
-                    <p className="mt-2 text-lg font-semibold text-slate-800 dark:text-slate-100">
-                      {activeQuality.label}
-                    </p>
+                    <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-slate-500 dark:text-slate-400">
+                      {optimizeSuggestions.length === 0 ? (
+                        <li>{labels.performanceOptimizeFast}</li>
+                      ) : (
+                        optimizeSuggestions.map((suggestion, index) => <li key={index}>{suggestion}</li>)
+                      )}
+                    </ul>
                   </div>
-
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950">
-                    <div className="flex items-center justify-between text-xs text-slate-500">
-                      <span className="flex items-center gap-2">
-                        <Zap className="h-4 w-4" />
-                        {labels.performanceConnection}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={runSpeedTest}
-                        disabled={speedTestRunning}
-                        className="text-xs font-semibold text-red-500 hover:text-red-600 disabled:opacity-50"
-                      >
-                        {speedTestRunning ? '...' : labels.performanceTest}
-                      </button>
-                    </div>
-                    <p className="mt-2 text-lg font-semibold text-slate-800 dark:text-slate-100">
-                      {connectionKbps ? labels.performanceKbps(connectionKbps) : '—'}
-                    </p>
-                  </div>
-
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950">
-                    <div className="flex items-center gap-2 text-xs text-slate-500">
-                      <HardDrive className="h-4 w-4" />
-                      {labels.performanceCacheStatus}
-                    </div>
-                    <p className="mt-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
-                      {cacheEnabled ? labels.performanceCacheEnabled : labels.performanceCacheDisabled}
-                    </p>
-                    <p className="text-xs text-slate-500">{cachedStreamsCount}</p>
-                  </div>
-                </div>
-
-                <div className="mt-4 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm dark:border-slate-800 dark:bg-slate-950">
-                  <div className="flex items-center gap-2 text-slate-600 dark:text-slate-300">
-                    <Activity className="h-4 w-4" />
-                    {labels.performanceOptimize}
-                  </div>
-                  <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-slate-500 dark:text-slate-400">
-                    {optimizeSuggestions.length === 0 ? (
-                      <li>{labels.performanceOptimizeFast}</li>
-                    ) : (
-                      optimizeSuggestions.map((suggestion, index) => <li key={index}>{suggestion}</li>)
-                    )}
-                  </ul>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            )}
 
             {/* Description Card - More Prominent for SEO */}
             {stream.description && (
@@ -1383,197 +1394,205 @@ export default function StreamPage() {
               </Card>
             )}
 
-            <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
-              <Card className="border-2 border-amber-200 dark:border-amber-900">
+            {(featureFlags.streamRatings || featureFlags.streamSharing) && (
+              <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
+                {featureFlags.streamRatings && (
+                  <Card className="border-2 border-amber-200 dark:border-amber-900">
+                    <CardHeader>
+                      <CardTitle className="text-xl text-slate-800 dark:text-slate-100">{labels.ratingTitle}</CardTitle>
+                      <CardDescription>{labels.ratingDesc}</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1 text-xl text-amber-500">
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <button
+                              key={star}
+                              type="button"
+                              onClick={() => setStreamRating(star)}
+                              className={`transition ${currentRating >= star ? 'text-amber-500' : 'text-slate-300'}`}
+                              aria-label={labels.ratingAria(star)}
+                            >
+                              ★
+                            </button>
+                          ))}
+                        </div>
+                        <span className="text-sm text-slate-500">{currentRating.toFixed(1)} / 5</span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={reviewDraft}
+                          onChange={(event) => setReviewDraft(event.target.value)}
+                          placeholder={labels.reviewPlaceholder}
+                          className="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 shadow-sm focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-200 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+                        />
+                        <button
+                          type="button"
+                          onClick={submitReview}
+                          className="rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-600"
+                        >
+                          {labels.send}
+                        </button>
+                      </div>
+
+                      {streamReviews.length === 0 ? (
+                        <div className="rounded-lg border border-dashed border-slate-300 p-3 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
+                          {labels.noReviews}
+                        </div>
+                      ) : (
+                        <ul className="space-y-2 text-sm text-slate-600 dark:text-slate-300">
+                          {streamReviews.map((entry) => (
+                            <li key={entry.createdAt} className="rounded-lg border border-slate-200 p-3 dark:border-slate-800">
+                              <p className="text-xs text-slate-500">{entry.comment}</p>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
+
+                {featureFlags.streamSharing && (
+                  <Card className="border-2 border-emerald-200 dark:border-emerald-900">
+                    <CardHeader>
+                      <CardTitle className="text-xl text-slate-800 dark:text-slate-100">{labels.shareTitle}</CardTitle>
+                      <CardDescription>{labels.shareDesc}</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => shareToPlatform('whatsapp')}
+                          className="rounded-full bg-emerald-500 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-600"
+                        >
+                          WhatsApp
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => shareToPlatform('twitter')}
+                          className="rounded-full bg-sky-500 px-4 py-2 text-xs font-semibold text-white hover:bg-sky-600"
+                        >
+                          Twitter
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => shareToPlatform('facebook')}
+                          className="rounded-full bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700"
+                        >
+                          Facebook
+                        </button>
+                        <button
+                          type="button"
+                          onClick={copyShareLink}
+                          className="rounded-full border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-600 hover:border-red-400 dark:border-slate-700 dark:text-slate-300"
+                        >
+                          {labels.copyLink}
+                        </button>
+                      </div>
+
+                      <div className="text-xs text-slate-500">{labels.shareCount(shareCount)}</div>
+
+                      <div>
+                        <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">{labels.embedCode}</label>
+                        <div className="mt-2 flex items-center gap-2">
+                          <input
+                            type="text"
+                            readOnly
+                            value={
+                              shareUrl
+                                ? `<iframe src="${shareUrl}" width="640" height="360" frameborder="0" allowfullscreen></iframe>`
+                                : ''
+                            }
+                            className="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+                          />
+                          <button
+                            type="button"
+                            onClick={copyEmbedCode}
+                            className="rounded-lg bg-amber-500 px-3 py-2 text-xs font-semibold text-white hover:bg-amber-600"
+                          >
+                            {labels.copyCode}
+                          </button>
+                        </div>
+                        {embedCopied && (
+                          <p className="mt-1 text-xs text-amber-600">{labels.embedCopied}</p>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-4">
+                        {shareUrl ? (
+                          <img
+                            src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(shareUrl)}`}
+                            alt="QR code"
+                            className="h-28 w-28 rounded-xl border border-slate-200 bg-white p-2 dark:border-slate-800"
+                          />
+                        ) : (
+                          <div className="h-28 w-28 rounded-xl border border-dashed border-slate-300 dark:border-slate-700" />
+                        )}
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          {labels.scanQr}
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+            )}
+
+            {featureFlags.streamEpg && (
+              <Card className="mt-6 border-2 border-indigo-200 dark:border-indigo-900">
                 <CardHeader>
-                  <CardTitle className="text-xl text-slate-800 dark:text-slate-100">{labels.ratingTitle}</CardTitle>
-                  <CardDescription>{labels.ratingDesc}</CardDescription>
+                <CardTitle className="text-xl text-slate-800 dark:text-slate-100">{labels.epgTitle}</CardTitle>
+                <CardDescription>{labels.epgDesc}</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1 text-xl text-amber-500">
-                      {[1, 2, 3, 4, 5].map((star) => (
-                        <button
-                          key={star}
-                          type="button"
-                          onClick={() => setStreamRating(star)}
-                          className={`transition ${currentRating >= star ? 'text-amber-500' : 'text-slate-300'}`}
-                          aria-label={labels.ratingAria(star)}
-                        >
-                          ★
-                        </button>
-                      ))}
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-800">
+                      <p className="text-xs text-emerald-500 font-semibold">{labels.now}</p>
+                      <h4 className="text-sm font-bold text-slate-800 dark:text-slate-100">{currentProgram.title}</h4>
+                      <p className="text-xs text-slate-500">{currentProgram.start} - {currentProgram.end}</p>
+                      <p className="mt-2 text-xs text-slate-600 dark:text-slate-300">{currentProgram.description}</p>
+                      <button
+                        type="button"
+                        onClick={() => setEpgReminders((prev) => ({ ...prev, [currentProgram.id]: !prev[currentProgram.id] }))}
+                        className="mt-3 rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-indigo-400 dark:border-slate-700 dark:text-slate-300"
+                      >
+                        {epgReminders[currentProgram.id] ? labels.removeReminder : labels.remind}
+                      </button>
                     </div>
-                    <span className="text-sm text-slate-500">{currentRating.toFixed(1)} / 5</span>
+                    <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-800">
+                      <p className="text-xs text-indigo-500 font-semibold">{labels.next}</p>
+                      <h4 className="text-sm font-bold text-slate-800 dark:text-slate-100">{nextProgram.title}</h4>
+                      <p className="text-xs text-slate-500">{nextProgram.start} - {nextProgram.end}</p>
+                      <p className="mt-2 text-xs text-slate-600 dark:text-slate-300">{nextProgram.description}</p>
+                      <button
+                        type="button"
+                        onClick={() => setEpgReminders((prev) => ({ ...prev, [nextProgram.id]: !prev[nextProgram.id] }))}
+                        className="mt-3 rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-indigo-400 dark:border-slate-700 dark:text-slate-300"
+                      >
+                        {epgReminders[nextProgram.id] ? labels.removeReminder : labels.remind}
+                      </button>
+                    </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      value={reviewDraft}
-                      onChange={(event) => setReviewDraft(event.target.value)}
-                      placeholder={labels.reviewPlaceholder}
-                      className="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 shadow-sm focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-200 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
-                    />
-                    <button
-                      type="button"
-                      onClick={submitReview}
-                      className="rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-600"
-                    >
-                      {labels.send}
-                    </button>
-                  </div>
-
-                  {streamReviews.length === 0 ? (
-                    <div className="rounded-lg border border-dashed border-slate-300 p-3 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
-                      {labels.noReviews}
-                    </div>
-                  ) : (
-                    <ul className="space-y-2 text-sm text-slate-600 dark:text-slate-300">
-                      {streamReviews.map((entry) => (
-                        <li key={entry.createdAt} className="rounded-lg border border-slate-200 p-3 dark:border-slate-800">
-                          <p className="text-xs text-slate-500">{entry.comment}</p>
+                  <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-800">
+                    <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-200">{labels.programDetails}</h4>
+                    <ul className="mt-3 space-y-2 text-xs text-slate-600 dark:text-slate-300">
+                      {schedule.map((item) => (
+                        <li key={item.id} className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="font-semibold text-slate-800 dark:text-slate-100">{item.title}</p>
+                            <p className="text-slate-500">{item.start} - {item.end}</p>
+                          </div>
+                          <span className="text-slate-400">{labels.details}</span>
                         </li>
                       ))}
                     </ul>
-                  )}
-                </CardContent>
-              </Card>
-
-              <Card className="border-2 border-emerald-200 dark:border-emerald-900">
-                <CardHeader>
-                  <CardTitle className="text-xl text-slate-800 dark:text-slate-100">{labels.shareTitle}</CardTitle>
-                  <CardDescription>{labels.shareDesc}</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => shareToPlatform('whatsapp')}
-                      className="rounded-full bg-emerald-500 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-600"
-                    >
-                      WhatsApp
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => shareToPlatform('twitter')}
-                      className="rounded-full bg-sky-500 px-4 py-2 text-xs font-semibold text-white hover:bg-sky-600"
-                    >
-                      Twitter
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => shareToPlatform('facebook')}
-                      className="rounded-full bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700"
-                    >
-                      Facebook
-                    </button>
-                    <button
-                      type="button"
-                      onClick={copyShareLink}
-                      className="rounded-full border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-600 hover:border-red-400 dark:border-slate-700 dark:text-slate-300"
-                    >
-                      {labels.copyLink}
-                    </button>
-                  </div>
-
-                  <div className="text-xs text-slate-500">{labels.shareCount(shareCount)}</div>
-
-                  <div>
-                    <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">{labels.embedCode}</label>
-                    <div className="mt-2 flex items-center gap-2">
-                      <input
-                        type="text"
-                        readOnly
-                        value={
-                          shareUrl
-                            ? `<iframe src="${shareUrl}" width="640" height="360" frameborder="0" allowfullscreen></iframe>`
-                            : ''
-                        }
-                        className="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
-                      />
-                      <button
-                        type="button"
-                        onClick={copyEmbedCode}
-                        className="rounded-lg bg-amber-500 px-3 py-2 text-xs font-semibold text-white hover:bg-amber-600"
-                      >
-                        {labels.copyCode}
-                      </button>
-                    </div>
-                    {embedCopied && (
-                      <p className="mt-1 text-xs text-amber-600">{labels.embedCopied}</p>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-4">
-                    {shareUrl ? (
-                      <img
-                        src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(shareUrl)}`}
-                        alt="QR code"
-                        className="h-28 w-28 rounded-xl border border-slate-200 bg-white p-2 dark:border-slate-800"
-                      />
-                    ) : (
-                      <div className="h-28 w-28 rounded-xl border border-dashed border-slate-300 dark:border-slate-700" />
-                    )}
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                      {labels.scanQr}
-                    </p>
                   </div>
                 </CardContent>
               </Card>
-            </div>
-
-            <Card className="mt-6 border-2 border-indigo-200 dark:border-indigo-900">
-              <CardHeader>
-              <CardTitle className="text-xl text-slate-800 dark:text-slate-100">{labels.epgTitle}</CardTitle>
-              <CardDescription>{labels.epgDesc}</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-800">
-                    <p className="text-xs text-emerald-500 font-semibold">{labels.now}</p>
-                    <h4 className="text-sm font-bold text-slate-800 dark:text-slate-100">{currentProgram.title}</h4>
-                    <p className="text-xs text-slate-500">{currentProgram.start} - {currentProgram.end}</p>
-                    <p className="mt-2 text-xs text-slate-600 dark:text-slate-300">{currentProgram.description}</p>
-                    <button
-                      type="button"
-                      onClick={() => setEpgReminders((prev) => ({ ...prev, [currentProgram.id]: !prev[currentProgram.id] }))}
-                      className="mt-3 rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-indigo-400 dark:border-slate-700 dark:text-slate-300"
-                    >
-                      {epgReminders[currentProgram.id] ? labels.removeReminder : labels.remind}
-                    </button>
-                  </div>
-                  <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-800">
-                    <p className="text-xs text-indigo-500 font-semibold">{labels.next}</p>
-                    <h4 className="text-sm font-bold text-slate-800 dark:text-slate-100">{nextProgram.title}</h4>
-                    <p className="text-xs text-slate-500">{nextProgram.start} - {nextProgram.end}</p>
-                    <p className="mt-2 text-xs text-slate-600 dark:text-slate-300">{nextProgram.description}</p>
-                    <button
-                      type="button"
-                      onClick={() => setEpgReminders((prev) => ({ ...prev, [nextProgram.id]: !prev[nextProgram.id] }))}
-                      className="mt-3 rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-indigo-400 dark:border-slate-700 dark:text-slate-300"
-                    >
-                      {epgReminders[nextProgram.id] ? labels.removeReminder : labels.remind}
-                    </button>
-                  </div>
-                </div>
-
-                <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-800">
-                  <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-200">{labels.programDetails}</h4>
-                  <ul className="mt-3 space-y-2 text-xs text-slate-600 dark:text-slate-300">
-                    {schedule.map((item) => (
-                      <li key={item.id} className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="font-semibold text-slate-800 dark:text-slate-100">{item.title}</p>
-                          <p className="text-slate-500">{item.start} - {item.end}</p>
-                        </div>
-                        <span className="text-slate-400">{labels.details}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </CardContent>
-            </Card>
+            )}
 
             {/* Bottom Ads */}
             {bottomAds.length > 0 && (

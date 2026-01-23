@@ -150,7 +150,7 @@ export default function ProfilePage() {
   useEffect(() => {
     const storedProfile = localStorage.getItem(USER_PROFILE_KEY);
     if (!storedProfile) {
-      router.replace('/login');
+      router.replace('/register');
     }
   }, [router]);
 

@@ -290,6 +290,13 @@ export default function AdminDashboard() {
     quickActions: true,
     liveChat: true,
     webRtc: true,
+    streamPerformance: true,
+    streamRatings: true,
+    streamSharing: true,
+    streamEpg: true,
+    streamShortcuts: true,
+    streamPip: true,
+    streamServerSelect: true,
   });
   const [streamsPage, setStreamsPage] = useState(1);
   const [siteSettings, setSiteSettings] = useState({
@@ -4877,6 +4884,13 @@ export default function AdminDashboard() {
                             { key: 'accessibility', label: 'خيارات إمكانية الوصول' },
                             { key: 'userFeatures', label: 'المفضلة + المشاهدة الأخيرة' },
                             { key: 'quickActions', label: 'القائمة السريعة داخل البطاقات' },
+                            { key: 'streamServerSelect', label: 'محدد سيرفرات البث في صفحة القناة' },
+                            { key: 'streamShortcuts', label: 'اختصارات لوحة المفاتيح في صفحة القناة' },
+                            { key: 'streamPip', label: 'زر PiP في صفحة القناة' },
+                            { key: 'streamPerformance', label: 'لوحة الأداء في صفحة القناة' },
+                            { key: 'streamRatings', label: 'التقييمات والمراجعات في صفحة القناة' },
+                            { key: 'streamSharing', label: 'مشاركة القناة في صفحة القناة' },
+                            { key: 'streamEpg', label: 'دليل البرامج (EPG) في صفحة القناة' },
                             { key: 'liveChat', label: 'الدردشة المباشرة' },
                             { key: 'webRtc', label: 'وضع WebRTC منخفض التأخير' },
                           ].map((feature) => (
