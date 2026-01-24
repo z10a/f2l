@@ -107,7 +107,6 @@ export default function RegisterPage() {
                     value={name}
                     onChange={(event) => setName(event.target.value)}
                   />
-                  <Input id="name" placeholder={language === 'ar' ? 'أحمد علي' : 'Jane Doe'} className="pl-9" />
                 </div>
               </div>
               <div className="space-y-2">
@@ -122,7 +121,6 @@ export default function RegisterPage() {
                     value={email}
                     onChange={(event) => setEmail(event.target.value)}
                   />
-                  <Input id="email" type="email" placeholder="name@email.com" className="pl-9" />
                 </div>
               </div>
             </div>
@@ -194,7 +192,6 @@ export default function RegisterPage() {
                 router.push('/profile');
               }}
             >
-            <Button className="w-full" size="lg" disabled={!acceptedTerms}>
               {labels.register}
             </Button>
 
