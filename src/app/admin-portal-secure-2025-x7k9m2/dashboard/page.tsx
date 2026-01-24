@@ -13,26 +13,7 @@ import {
   Edit,
   MoreVertical,
   Menu,
-  X,
-  Upload,
-  CheckCircle2,
-  XCircle,
-  RefreshCw,
-  Pin,
-  Timer,
-  BarChart3,
-  Rows,
-  CopyCheck,
-  ImagePlus,
-  Gauge,
-  FolderTree,
-  Database,
-  MonitorPlay,
-  Bot,
-  Cloud,
-  ServerCog,
-  SlidersHorizontal,
-  Settings,
+  X
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -56,14 +37,12 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
-import { getStreamQuality, formatQualityInfo } from '@/lib/utils/quality-detection';
 
 interface Stream {
   id: string;
   title: string;
   description: string | null;
   thumbnail: string | null;
-  categoryId?: string | null;
   published: boolean;
   servers: Server[];
   playlistUrl?: string;
@@ -88,7 +67,6 @@ interface User {
   email: string;
   role: string;
   password?: string;
-  theme?: 'light' | 'dark';
   createdAt?: string;
   updatedAt?: string;
 }
@@ -171,155 +149,9 @@ export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<Tab>('streams');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [streams, setStreams] = useState<Stream[]>([]);
-  const [pinnedStreams, setPinnedStreams] = useState<Set<string>>(new Set());
   const [users, setUsers] = useState<User[]>([]);
   const [ads, setAds] = useState<Ad[]>([]);
   const [loading, setLoading] = useState(true);
-  const [refreshConfigs, setRefreshConfigs] = useState<PlaylistRefreshConfig[]>([]);
-  const [refreshForm, setRefreshForm] = useState({
-    name: '',
-    url: '',
-    interval: 'daily' as RefreshInterval,
-    notifyEmail: '',
-  });
-  const [editingRefresh, setEditingRefresh] = useState<PlaylistRefreshConfig | null>(null);
-  const [refreshingIds, setRefreshingIds] = useState<Set<string>>(new Set());
-  const [analyticsRange, setAnalyticsRange] = useState<'24h' | '7d' | '30d'>('7d');
-  const [batchUrlText, setBatchUrlText] = useState('');
-  const [batchDeleteIds, setBatchDeleteIds] = useState('');
-  const [batchMetaIds, setBatchMetaIds] = useState('');
-  const [batchCategory, setBatchCategory] = useState('');
-  const [batchDescription, setBatchDescription] = useState('');
-  const [batchProcessing, setBatchProcessing] = useState(false);
-  const [duplicateProcessing, setDuplicateProcessing] = useState(false);
-  const [mergePrimaryId, setMergePrimaryId] = useState('');
-  const [thumbnailProcessing, setThumbnailProcessing] = useState(false);
-  const [thumbnailSummary, setThumbnailSummary] = useState<{
-    updated: number;
-    skipped: number;
-    failed: number;
-  } | null>(null);
-  const [qualityUrl, setQualityUrl] = useState('');
-  const [qualityReport, setQualityReport] = useState<{
-    status: 'success' | 'failed';
-    latencyMs?: number;
-    bufferMs?: number;
-    bitrateKbps?: number;
-    resolution?: string;
-    qualityLabel?: string;
-    message?: string;
-  } | null>(null);
-  const [qualityProcessing, setQualityProcessing] = useState(false);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [categoryName, setCategoryName] = useState('');
-  const [categoryParentId, setCategoryParentId] = useState('');
-  const [selectedStreamIds, setSelectedStreamIds] = useState<Set<string>>(new Set());
-  const [backupSchedule, setBackupSchedule] = useState<'daily' | 'weekly' | 'monthly'>('weekly');
-  const [lastBackupAt, setLastBackupAt] = useState<string | null>(null);
-  const [backupProcessing, setBackupProcessing] = useState(false);
-  const [previewUrl, setPreviewUrl] = useState('');
-  const [previewStreamId, setPreviewStreamId] = useState('');
-  const [previewReport, setPreviewReport] = useState<{
-    codec?: string;
-    resolution?: string;
-    bitrateKbps?: number;
-    latencyMs?: number;
-  } | null>(null);
-  const [aiCategorizeResults, setAiCategorizeResults] = useState<
-    { id: string; title: string; category: string; confidence: number }[]
-  >([]);
-  const [aiCategorizeRunning, setAiCategorizeRunning] = useState(false);
-  const [cdnConfig, setCdnConfig] = useState({
-    provider: 'cloudflare',
-    zoneId: '',
-    cacheTtl: 3600,
-    purgeOnPublish: true,
-    enabled: false,
-  });
-  const [cdnStatus, setCdnStatus] = useState<string | null>(null);
-  const [loadBalancingConfig, setLoadBalancingConfig] = useState({
-    strategy: 'round-robin',
-    healthCheckUrl: '',
-    autoFailover: true,
-    weighted: false,
-    primaryWeight: 70,
-    secondaryWeight: 30,
-  });
-  const [loadBalancingStatus, setLoadBalancingStatus] = useState<string | null>(null);
-  const [autoScalingConfig, setAutoScalingConfig] = useState({
-    enabled: false,
-    minServers: 2,
-    maxServers: 6,
-    targetCpu: 65,
-    cooldownMinutes: 10,
-    scheduleNote: '',
-  });
-  const [autoScalingStatus, setAutoScalingStatus] = useState<string | null>(null);
-  const [offsiteBackupConfig, setOffsiteBackupConfig] = useState({
-    provider: 's3',
-    bucket: '',
-    region: '',
-    encryption: true,
-    schedule: 'daily',
-    lastRunAt: '',
-  });
-  const [offsiteBackupStatus, setOffsiteBackupStatus] = useState<string | null>(null);
-  const [abTestingConfig, setAbTestingConfig] = useState({
-    removeLowPriority: false,
-    failoverEnabled: true,
-    sampleWindowMinutes: 120,
-    minSamples: 25,
-  });
-  const [abTestingReport, setAbTestingReport] = useState<{
-    totalRequests: number;
-    topServer?: { id: string; name: string; usage: number };
-    laggingServers: { id: string; name: string; usage: number }[];
-    failoverSuggested: boolean;
-    notes: string[];
-  } | null>(null);
-  const [abTestingRunning, setAbTestingRunning] = useState(false);
-  const [featureFlags, setFeatureFlags] = useState({
-    aiRecommendations: true,
-    pushNotifications: true,
-    engagementAnalytics: true,
-    appsSection: true,
-    offlineMode: true,
-    accessibility: true,
-    userFeatures: true,
-    quickActions: true,
-    liveChat: true,
-    webRtc: true,
-    streamPerformance: true,
-    streamRatings: true,
-    streamSharing: true,
-    streamEpg: true,
-    streamShortcuts: true,
-    streamPip: true,
-    streamServerSelect: true,
-  });
-  const [streamsPage, setStreamsPage] = useState(1);
-  const [siteSettings, setSiteSettings] = useState({
-    title: 'منصة البث المباشر',
-    faviconUrl: '',
-    fontName: '',
-    fontUrl: '',
-    primaryColor: '#dc2626',
-    featuredStreamIds: [] as string[],
-  });
-  const [featuredInput, setFeaturedInput] = useState('');
-
-  // Stream status tracking
-  const [streamStatus, setStreamStatus] = useState<Map<string, 'working' | 'broken'>>(new Map());
-  const [checkingStatus, setCheckingStatus] = useState(false);
-
-  // Get the highest priority server URL for quality detection
-  const getPrimaryServerUrl = (stream: Stream) => {
-    if (stream.servers && stream.servers.length > 0) {
-      const sortedServers = [...stream.servers].sort((a, b) => a.priority - b.priority);
-      return sortedServers[0].url;
-    }
-    return undefined;
-  };
 
   // Stream form state
   const [streamFormOpen, setStreamFormOpen] = useState(false);
@@ -357,7 +189,6 @@ export default function AdminDashboard() {
     name: '',
     password: '',
     role: 'user',
-    theme: 'light',
   });
 
   // Ad form state
@@ -377,170 +208,6 @@ export default function AdminDashboard() {
     fetchData();
   }, [activeTab]);
 
-  useEffect(() => {
-    const storedPins = localStorage.getItem('pinnedStreams');
-    if (storedPins) {
-      try {
-        const parsedPins = JSON.parse(storedPins) as string[];
-        setPinnedStreams(new Set(parsedPins));
-      } catch (error) {
-        console.error('Failed to parse pinned streams:', error);
-      }
-    }
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem('pinnedStreams', JSON.stringify([...pinnedStreams]));
-  }, [pinnedStreams]);
-
-  useEffect(() => {
-    const storedSettings = localStorage.getItem(WEBSITE_SETTINGS_KEY);
-    if (!storedSettings) return;
-    try {
-      const parsed = JSON.parse(storedSettings) as typeof siteSettings;
-      setSiteSettings(parsed);
-      setFeaturedInput(parsed.featuredStreamIds.join(', '));
-    } catch (error) {
-      console.error('Failed to parse site settings:', error);
-    }
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem(WEBSITE_SETTINGS_KEY, JSON.stringify(siteSettings));
-  }, [siteSettings]);
-
-  useEffect(() => {
-    const storedConfigs = localStorage.getItem('playlistRefreshConfigs');
-    if (storedConfigs) {
-      try {
-        const parsedConfigs = JSON.parse(storedConfigs) as PlaylistRefreshConfig[];
-        setRefreshConfigs(parsedConfigs);
-      } catch (error) {
-        console.error('Failed to parse refresh configs:', error);
-      }
-    }
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem('playlistRefreshConfigs', JSON.stringify(refreshConfigs));
-  }, [refreshConfigs]);
-
-  useEffect(() => {
-    const storedCategories = localStorage.getItem('adminCategories');
-    if (storedCategories) {
-      try {
-        const parsedCategories = JSON.parse(storedCategories) as Category[];
-        setCategories(parsedCategories);
-      } catch (error) {
-        console.error('Failed to parse categories:', error);
-      }
-    }
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem('adminCategories', JSON.stringify(categories));
-  }, [categories]);
-
-  useEffect(() => {
-    const storedSchedule = localStorage.getItem('backupSchedule');
-    const storedLastBackup = localStorage.getItem('lastBackupAt');
-    if (storedSchedule === 'daily' || storedSchedule === 'weekly' || storedSchedule === 'monthly') {
-      setBackupSchedule(storedSchedule);
-    }
-    if (storedLastBackup) {
-      setLastBackupAt(storedLastBackup);
-    }
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem('backupSchedule', backupSchedule);
-  }, [backupSchedule]);
-
-  useEffect(() => {
-    if (lastBackupAt) {
-      localStorage.setItem('lastBackupAt', lastBackupAt);
-    }
-  }, [lastBackupAt]);
-
-  useEffect(() => {
-    const maxPage = Math.max(1, Math.ceil(streams.length / 50));
-    if (streamsPage > maxPage) {
-      setStreamsPage(maxPage);
-    }
-  }, [streams.length, streamsPage]);
-
-  useEffect(() => {
-    const storedOps = localStorage.getItem('adminOpsConfigs');
-    if (storedOps) {
-      try {
-        const parsed = JSON.parse(storedOps) as {
-          cdnConfig?: typeof cdnConfig;
-          loadBalancingConfig?: typeof loadBalancingConfig;
-          autoScalingConfig?: typeof autoScalingConfig;
-          offsiteBackupConfig?: typeof offsiteBackupConfig;
-          abTestingConfig?: typeof abTestingConfig;
-          featureFlags?: typeof featureFlags;
-        };
-        if (parsed.cdnConfig) {
-          setCdnConfig(parsed.cdnConfig);
-        }
-        if (parsed.loadBalancingConfig) {
-          setLoadBalancingConfig(parsed.loadBalancingConfig);
-        }
-        if (parsed.autoScalingConfig) {
-          setAutoScalingConfig(parsed.autoScalingConfig);
-        }
-        if (parsed.offsiteBackupConfig) {
-          setOffsiteBackupConfig(parsed.offsiteBackupConfig);
-        }
-        if (parsed.abTestingConfig) {
-          setAbTestingConfig(parsed.abTestingConfig);
-        }
-        if (parsed.featureFlags) {
-          setFeatureFlags(parsed.featureFlags);
-        }
-      } catch (error) {
-        console.error('Failed to parse ops configs:', error);
-      }
-    }
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem(
-      'adminOpsConfigs',
-      JSON.stringify({
-        cdnConfig,
-        loadBalancingConfig,
-        autoScalingConfig,
-        offsiteBackupConfig,
-        abTestingConfig,
-        featureFlags,
-      })
-    );
-  }, [autoScalingConfig, cdnConfig, loadBalancingConfig, offsiteBackupConfig, abTestingConfig, featureFlags]);
-
-  useEffect(() => {
-    localStorage.setItem('websiteFeatureFlags', JSON.stringify(featureFlags));
-  }, [featureFlags]);
-
-  useEffect(() => {
-    if (previewStreamId) {
-      const stream = streams.find((item) => item.id === previewStreamId);
-      if (stream && stream.servers.length > 0) {
-        const sortedServers = [...stream.servers].sort((a, b) => a.priority - b.priority);
-        setPreviewUrl(sortedServers[0].url);
-      }
-    }
-  }, [previewStreamId, streams]);
-
-  useEffect(() => {
-    const intervalId = setInterval(() => {
-      refreshDuePlaylists();
-    }, 60_000);
-
-    return () => clearInterval(intervalId);
-  }, [refreshConfigs, refreshingIds]);
-
   const checkAuth = () => {
     const adminUser = localStorage.getItem('adminUser');
     if (!adminUser) {
@@ -551,19 +218,7 @@ export default function AdminDashboard() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      if (
-        activeTab === 'streams' ||
-        activeTab === 'duplicates' ||
-        activeTab === 'thumbnails' ||
-        activeTab === 'quality' ||
-        activeTab === 'categories' ||
-        activeTab === 'backup' ||
-        activeTab === 'preview' ||
-        activeTab === 'infrastructure' ||
-        activeTab === 'abTesting' ||
-        activeTab === 'featureFlags' ||
-        activeTab === 'siteSettings'
-      ) {
+      if (activeTab === 'streams') {
         const response = await fetch('/api/streams');
         const data = await response.json();
         setStreams(data);
@@ -575,18 +230,6 @@ export default function AdminDashboard() {
         const response = await fetch('/api/ads');
         const data = await response.json();
         setAds(data);
-      } else if (activeTab === 'autoRefresh') {
-        setLoading(false);
-        return;
-      } else if (activeTab === 'analytics') {
-        setLoading(false);
-        return;
-      } else if (activeTab === 'batch') {
-        setLoading(false);
-        return;
-      } else if (activeTab === 'categories' || activeTab === 'backup' || activeTab === 'preview') {
-        setLoading(false);
-        return;
       }
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -596,487 +239,195 @@ export default function AdminDashboard() {
     }
   };
 
-  const togglePinStream = (streamId: string) => {
-    setPinnedStreams((prev) => {
-      const next = new Set(prev);
-      if (next.has(streamId)) {
-        next.delete(streamId);
-      } else {
-        next.add(streamId);
-      }
-      return next;
-    });
+  const handleLogout = () => {
+    localStorage.removeItem('adminUser');
+    window.location.href = '/admin-portal-secure-2025-x7k9m2';
   };
 
-  const sortedStreams = [...streams].sort((a, b) => {
-    const aPinned = pinnedStreams.has(a.id);
-    const bPinned = pinnedStreams.has(b.id);
-    if (aPinned === bPinned) return 0;
-    return aPinned ? -1 : 1;
-  });
-  const streamsPerPage = 50;
-  const totalStreamPages = Math.max(1, Math.ceil(sortedStreams.length / streamsPerPage));
-  const paginatedStreams = sortedStreams.slice(
-    (streamsPage - 1) * streamsPerPage,
-    streamsPage * streamsPerPage
-  );
-
-  const intervalLabel = (interval: RefreshInterval) => {
-    if (interval === 'hourly') return 'كل ساعة';
-    if (interval === 'weekly') return 'أسبوعياً';
-    return 'يومياً';
-  };
-
-  const analyticsCards = [
-    { label: 'إجمالي المشاهدات', value: '128,420', delta: '+12%' },
-    { label: 'المستخدمون النشطون', value: '8,914', delta: '+5%' },
-    { label: 'وقت الذروة', value: '9:00 مساءً', delta: 'ثابت' },
-    { label: 'متوسط مدة المشاهدة', value: '18 دقيقة', delta: '+3%' },
-  ];
-
-  const topChannels = [
-    { name: 'قناة الأخبار', views: 18420, change: '+9%' },
-    { name: 'قناة الرياضة', views: 17210, change: '+6%' },
-    { name: 'قناة الأفلام', views: 15890, change: '+11%' },
-    { name: 'قناة الأطفال', views: 12740, change: '+4%' },
-    { name: 'قناة الموسيقى', views: 11890, change: '+2%' },
-  ];
-
-  const activityLogs = [
-    { id: 'log-1', action: 'تسجيل دخول', user: 'dilerbarakad@gmail.com', time: 'منذ 5 دقائق' },
-    { id: 'log-2', action: 'تحديث قائمة', user: 'dilerbarakad@gmail.com', time: 'منذ 20 دقيقة' },
-    { id: 'log-3', action: 'تعديل قناة', user: 'editor@f2l.com', time: 'منذ 45 دقيقة' },
-    { id: 'log-4', action: 'إضافة إعلان', user: 'dilerbarakad@gmail.com', time: 'قبل ساعة' },
-    { id: 'log-5', action: 'تسجيل خروج', user: 'dilerbarakad@gmail.com', time: 'قبل ساعتين' },
-  ];
-
-  const uptimeStats = [
-    { server: 'Server 1', uptime: '99.9%', incidents: '0' },
-    { server: 'Server 2', uptime: '98.7%', incidents: '2' },
-    { server: 'Server 3', uptime: '97.4%', incidents: '3' },
-    { server: 'Server 4', uptime: '96.8%', incidents: '5' },
-  ];
-
-  const peakUsage = [
-    { label: 'صباحاً', value: '18%' },
-    { label: 'ظهراً', value: '24%' },
-    { label: 'مساءً', value: '41%' },
-    { label: 'ليلاً', value: '17%' },
-  ];
-
-  const normalizeTitle = (title: string) =>
-    title.trim().toLowerCase().replace(/\s+/g, ' ');
-
-  const duplicateStreams = streams.reduce<Record<string, Stream[]>>((acc, stream) => {
-    const key = normalizeTitle(stream.title);
-    acc[key] = acc[key] ? [...acc[key], stream] : [stream];
-    return acc;
-  }, {});
-
-  const duplicateStreamGroups = Object.values(duplicateStreams).filter((group) => group.length > 1);
-
-  const serverUrlMap = streams.reduce<Record<string, { stream: Stream; server: Server }[]>>(
-    (acc, stream) => {
-      stream.servers.forEach((server) => {
-        const key = server.url.trim();
-        acc[key] = acc[key] ? [...acc[key], { stream, server }] : [{ stream, server }];
-      });
-      return acc;
-    },
-    {}
-  );
-
-  const duplicateServerGroups = Object.entries(serverUrlMap)
-    .filter(([, group]) => group.length > 1)
-    .map(([url, group]) => ({ url, group }));
-
-  const parseCsvLines = (content: string) => {
-    return content
-      .split('\n')
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .map((line) => line.split(',').map((value) => value.trim()));
-  };
-
-  const handleImportBatchFile = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      const text = reader.result?.toString() ?? '';
-      setBatchUrlText(text);
-    };
-    reader.readAsText(file);
-  };
-
-  const handleBatchUrlUpdate = async () => {
-    if (!batchUrlText.trim()) {
-      toast.error('يرجى إضافة بيانات التحديث');
-      return;
-    }
-
-    setBatchProcessing(true);
-    const rows = parseCsvLines(batchUrlText);
-    const updateRequests = rows.map(([serverId, url]) => ({
-      serverId,
-      url,
-    }));
-
-    const results = await Promise.all(
-      updateRequests.map(async ({ serverId, url }) => {
-        if (!serverId || !url) {
-          return { serverId, success: false, error: 'بيانات غير مكتملة' };
-        }
-        try {
-          const response = await fetch('/api/servers', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: serverId, url }),
-          });
-          if (!response.ok) {
-            const data = await response.json();
-            throw new Error(data.error || 'فشل التحديث');
-          }
-          return { serverId, success: true };
-        } catch (error) {
-          return {
-            serverId,
-            success: false,
-            error: error instanceof Error ? error.message : 'فشل التحديث',
-          };
-        }
-      })
-    );
-
-    const successCount = results.filter((result) => result.success).length;
-    const failureCount = results.length - successCount;
-
-    if (successCount > 0) {
-      toast.success(`تم تحديث ${successCount} رابط`);
-    }
-    if (failureCount > 0) {
-      toast.error(`فشل تحديث ${failureCount} رابط`);
-    }
-
-    setBatchProcessing(false);
-    fetchData();
-  };
-
-  const handleBatchDeleteStreams = async () => {
-    const ids = batchDeleteIds
-      .split(',')
-      .map((id) => id.trim())
-      .filter(Boolean);
-
-    if (ids.length === 0) {
-      toast.error('يرجى إدخال معرفات القنوات');
-      return;
-    }
-
-    setBatchProcessing(true);
-    const results = await Promise.all(
-      ids.map(async (id) => {
-        try {
-          const response = await fetch(`/api/streams/${id}`, { method: 'DELETE' });
-          if (!response.ok) {
-            const data = await response.json();
-            throw new Error(data.error || 'فشل الحذف');
-          }
-          return { id, success: true };
-        } catch (error) {
-          return {
-            id,
-            success: false,
-            error: error instanceof Error ? error.message : 'فشل الحذف',
-          };
-        }
-      })
-    );
-
-    const successCount = results.filter((result) => result.success).length;
-    const failureCount = results.length - successCount;
-
-    if (successCount > 0) {
-      toast.success(`تم حذف ${successCount} قناة`);
-    }
-    if (failureCount > 0) {
-      toast.error(`فشل حذف ${failureCount} قناة`);
-    }
-
-    setBatchProcessing(false);
-    fetchData();
-  };
-
-  const handleBatchMetadataUpdate = async () => {
-    const ids = batchMetaIds
-      .split(',')
-      .map((id) => id.trim())
-      .filter(Boolean);
-
-    if (ids.length === 0) {
-      toast.error('يرجى إدخال معرفات القنوات');
-      return;
-    }
-
-    if (!batchCategory && !batchDescription) {
-      toast.error('يرجى إدخال بيانات التعديل');
-      return;
-    }
-
-    setBatchProcessing(true);
-    const results = await Promise.all(
-      ids.map(async (id) => {
-        try {
-          const current = await fetch(`/api/streams/${id}`);
-          if (!current.ok) {
-            const data = await current.json();
-            throw new Error(data.error || 'لم يتم العثور على القناة');
-          }
-          const stream = await current.json();
-          const response = await fetch(`/api/streams/${id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              title: stream.title,
-              description: batchDescription || stream.description,
-              thumbnail: stream.thumbnail,
-              categoryId: batchCategory || stream.categoryId,
-              published: stream.published,
-              playlistUrl: stream.playlistUrl,
-            }),
-          });
-          if (!response.ok) {
-            const data = await response.json();
-            throw new Error(data.error || 'فشل التحديث');
-          }
-          return { id, success: true };
-        } catch (error) {
-          return {
-            id,
-            success: false,
-            error: error instanceof Error ? error.message : 'فشل التحديث',
-          };
-        }
-      })
-    );
-
-    const successCount = results.filter((result) => result.success).length;
-    const failureCount = results.length - successCount;
-
-    if (successCount > 0) {
-      toast.success(`تم تحديث بيانات ${successCount} قناة`);
-    }
-    if (failureCount > 0) {
-      toast.error(`فشل تحديث ${failureCount} قناة`);
-    }
-
-    setBatchProcessing(false);
-    fetchData();
-  };
-
-  const handleMergeDuplicates = async (primaryId: string, duplicateIds: string[]) => {
-    if (!primaryId || duplicateIds.length === 0) {
-      toast.error('يرجى اختيار قناة رئيسية وقنوات مكررة');
-      return;
-    }
-
-    setDuplicateProcessing(true);
+  // Stream operations
+  const handleCreateStream = async () => {
     try {
-      const response = await fetch('/api/admin/duplicates/merge', {
+      const adminUser = JSON.parse(localStorage.getItem('adminUser') || '{}');
+      const response = await fetch('/api/streams', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          primaryStreamId: primaryId,
-          duplicateStreamIds: duplicateIds,
+          ...streamForm,
+          authorId: adminUser.id,
+          playlistUrl: streamForm.playlistUrl,
         }),
       });
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || 'فشل دمج القنوات');
-      }
-      toast.success(`تم دمج ${data.mergedStreams} قناة`);
-      await fetchData();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'فشل دمج القنوات');
-    } finally {
-      setDuplicateProcessing(false);
-      setMergePrimaryId('');
-    }
-  };
+      if (!response.ok) throw new Error('Failed to create stream');
 
-  const handleMergeAllDuplicates = async () => {
-    if (duplicateStreamGroups.length === 0) {
-      toast.error('لا توجد قنوات مكررة للدمج');
-      return;
-    }
-    setDuplicateProcessing(true);
-    let mergedCount = 0;
-    try {
-      for (const group of duplicateStreamGroups) {
-        if (group.length < 2) continue;
-        const [primary, ...duplicates] = group;
-        const response = await fetch('/api/admin/duplicates/merge', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            primaryStreamId: primary.id,
-            duplicateStreamIds: duplicates.map((stream) => stream.id),
-          }),
-        });
-        const data = await response.json();
-        if (!response.ok) {
-          throw new Error(data.error || 'فشل دمج القنوات');
+      const stream = await response.json();
+
+      // Create servers if URLs are provided
+      const serverPromises = [];
+      streamForm.serverUrls.forEach((url, index) => {
+        if (url && url.trim()) {
+          serverPromises.push(
+            fetch('/api/servers', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                streamId: stream.id,
+                name: `الخادم ${index + 1}`,
+                url: url.trim(),
+                priority: index,
+              }),
+            })
+          );
         }
-        mergedCount += data.mergedStreams ?? duplicates.length;
-      }
-      toast.success(`تم دمج ${mergedCount} قناة مكررة`);
-      await fetchData();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'فشل دمج القنوات');
-    } finally {
-      setDuplicateProcessing(false);
-      setMergePrimaryId('');
-    }
-  };
-
-  const handleFaviconUpload = (file: File | null) => {
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      setSiteSettings((prev) => ({
-        ...prev,
-        faviconUrl: typeof reader.result === 'string' ? reader.result : prev.faviconUrl,
-      }));
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const handleFontUpload = (file: File | null) => {
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      setSiteSettings((prev) => ({
-        ...prev,
-        fontUrl: typeof reader.result === 'string' ? reader.result : prev.fontUrl,
-        fontName: file.name.replace(/\.[^/.]+$/, ''),
-      }));
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const applyFeaturedStreams = () => {
-    const ids = featuredInput
-      .split(/[\n,]/)
-      .map((id) => id.trim())
-      .filter(Boolean);
-    setSiteSettings((prev) => ({
-      ...prev,
-      featuredStreamIds: ids,
-    }));
-    setPinnedStreams(new Set(ids));
-    toast.success('تم تحديث القنوات المميزة');
-  };
-
-  const handleRegenerateThumbnails = async (force = false) => {
-    setThumbnailProcessing(true);
-    setThumbnailSummary(null);
-    try {
-      const response = await fetch('/api/admin/thumbnails/regenerate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ force }),
       });
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || 'فشل توليد الصور المصغرة');
-      }
-      setThumbnailSummary({
-        updated: data.updated ?? 0,
-        skipped: data.skipped ?? 0,
-        failed: data.failed ?? 0,
-      });
-      toast.success('تم تحديث الصور المصغرة');
-      await fetchData();
+
+      await Promise.all(serverPromises);
+
+      toast.success('تم إنشاء البث بنجاح');
+      setStreamFormOpen(false);
+      resetStreamForm();
+      fetchData();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'فشل توليد الصور المصغرة');
-    } finally {
-      setThumbnailProcessing(false);
+      toast.error('فشل في إنشاء البث');
     }
   };
 
-  const handleQualityTest = async () => {
-    if (!qualityUrl.trim()) {
-      toast.error('يرجى إدخال رابط البث');
-      return;
-    }
-    setQualityProcessing(true);
-    setQualityReport(null);
+  const handleUpdateStream = async () => {
+    if (!editingStream) return;
     try {
-      const response = await fetch('/api/admin/quality-test', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: qualityUrl.trim() }),
-      });
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || 'فشل اختبار الجودة');
-      }
-      setQualityReport({ status: 'success', ...data });
-      toast.success('تم تحليل الجودة');
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'فشل اختبار الجودة';
-      setQualityReport({ status: 'failed', message });
-      toast.error(message);
-    } finally {
-      setQualityProcessing(false);
-    }
-  };
-
-  const handleCreateCategory = () => {
-    if (!categoryName.trim()) {
-      toast.error('يرجى إدخال اسم التصنيف');
-      return;
-    }
-
-    const newCategory: Category = {
-      id: crypto.randomUUID(),
-      name: categoryName.trim(),
-      parentId: categoryParentId || undefined,
-    };
-
-    setCategories((prev) => [...prev, newCategory]);
-    setCategoryName('');
-    setCategoryParentId('');
-  };
-
-  const handleDeleteCategory = (categoryId: string) => {
-    setCategories((prev) => prev.filter((category) => category.id !== categoryId));
-  };
-
-  const updateStreamCategory = async (streamId: string, categoryId?: string) => {
-    try {
-      const current = await fetch(`/api/streams/${streamId}`);
-      if (!current.ok) {
-        const data = await current.json();
-        throw new Error(data.error || 'لم يتم العثور على القناة');
-      }
-      const stream = await current.json();
-      const response = await fetch(`/api/streams/${streamId}`, {
+      const response = await fetch(`/api/streams/${editingStream.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: stream.title,
-          description: stream.description,
-          thumbnail: stream.thumbnail,
-          categoryId: categoryId || null,
-          published: stream.published,
-          playlistUrl: stream.playlistUrl,
-        }),
+        body: JSON.stringify(streamForm),
       });
+      if (!response.ok) throw new Error('Failed to update stream');
+      toast.success('تم تحديث البث بنجاح');
+      setStreamFormOpen(false);
+      setEditingStream(null);
+      resetStreamForm();
+      fetchData();
+    } catch (error) {
+      toast.error('فشل في تحديث البث');
+    }
+  };
+
+  const handleDeleteStream = async (id: string) => {
+    try {
+      await fetch(`/api/streams/${id}`, { method: 'DELETE' });
+      toast.success('تم حذف البث بنجاح');
+      fetchData();
+    } catch (error) {
+      toast.error('فشل في حذف البث');
+    }
+  };
+
+  const openStreamForm = (stream?: Stream) => {
+    if (stream) {
+      setEditingStream(stream);
+      // Extract server URLs from the stream's servers
+      const serverUrls = stream.servers.map(server => server.url);
+      setStreamForm({
+        title: stream.title,
+        description: stream.description || '',
+        thumbnail: stream.thumbnail || '',
+        categoryId: '',
+        published: stream.published,
+        playlistUrl: stream.playlistUrl || '',
+        serverUrls: serverUrls.length > 0 ? serverUrls : ['', '', '', ''],
+      });
+    } else {
+      setEditingStream(null);
+      resetStreamForm();
+    }
+    setStreamFormOpen(true);
+  };
+
+  const resetStreamForm = () => {
+    setStreamForm({
+      title: '',
+      description: '',
+      thumbnail: '',
+      categoryId: '',
+      published: false,
+      playlistUrl: '',
+      serverUrls: ['', '', '', ''], // Reset to 4 empty servers
+    });
+    setParsedChannels([]);
+    setSelectedChannels([]);
+  };
+
+  // Parse M3U playlist
+  const handleParsePlaylist = async () => {
+    if (!streamForm.playlistUrl) {
+      toast.error('الرجا إدخال رابط ملف M3U');
+      return;
+    }
+
+    setLoadingChannels(true);
+    try {
+      const response = await fetch(streamForm.playlistUrl);
       if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'فشل تحديث التصنيف');
+        throw new Error('فشل في تحميل ملف القائمة');
+      }
+
+      const content = await response.text();
+      const channels: PlaylistChannel[] = [];
+      const lines = content.split('\n');
+      let currentChannel: Partial<PlaylistChannel> = {};
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+
+        // Parse EXTINF metadata
+        if (line.startsWith('#EXTINF:')) {
+          if (currentChannel.url) {
+            channels.push({ ...currentChannel } as PlaylistChannel);
+          }
+          currentChannel = { url: '' };
+
+          const extinfLine = line.substring(8); // Remove #EXTINF:
+          // Split by comma - everything after the last comma is the channel name
+          const lastCommaIndex = extinfLine.lastIndexOf(',');
+          if (lastCommaIndex !== -1) {
+            const metadataPart = extinfLine.substring(0, lastCommaIndex);
+            const channelName = extinfLine.substring(lastCommaIndex + 1).trim();
+
+            // Set channel name (remove quotes if present)
+            currentChannel.channelName = channelName.replace(/^"|"$/g, '');
+
+            // Parse metadata attributes
+            const attributes = metadataPart.split(/\s+/);
+            for (const attr of attributes) {
+              if (attr.includes('=')) {
+                const [key, value] = attr.split('=');
+                const cleanKey = key.trim().toLowerCase();
+                const cleanValue = value.replace(/^"|"$/g, '').trim();
+
+                if (cleanKey === 'tvg-id') {
+                  currentChannel.channelId = cleanValue;
+                } else if (cleanKey === 'tvg-logo') {
+                  currentChannel.logo = cleanValue;
+                } else if (cleanKey === 'tvg-name') {
+                  if (!currentChannel.channelName) {
+                    currentChannel.channelName = cleanValue;
+                  }
+                } else if (cleanKey === 'group-title') {
+                  currentChannel.groupTitle = cleanValue;
+                }
+              }
+            }
+          }
+        }
+
+        // Parse stream URL
+        if (!line.startsWith('#') && line.trim()) {
+          currentChannel.url = line.trim();
+        }
+      }
+
+      // Add last channel
+      if (currentChannel.url) {
+        channels.push({ ...currentChannel } as PlaylistChannel);
       }
       toast.success('تم تحديث التصنيف');
     } catch (error) {
@@ -1084,50 +435,13 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleBulkAssignCategory = async (categoryId: string) => {
-    if (selectedStreamIds.size === 0) {
-      toast.error('يرجى اختيار قنوات');
-      return;
-    }
-    setBatchProcessing(true);
-    const results = await Promise.all(
-      Array.from(selectedStreamIds).map(async (id) => {
-        try {
-          const current = await fetch(`/api/streams/${id}`);
-          if (!current.ok) {
-            const data = await current.json();
-            throw new Error(data.error || 'لم يتم العثور على القناة');
-          }
-          const stream = await current.json();
-          const response = await fetch(`/api/streams/${id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              title: stream.title,
-              description: stream.description,
-              thumbnail: stream.thumbnail,
-              categoryId: categoryId || null,
-              published: stream.published,
-              playlistUrl: stream.playlistUrl,
-            }),
-          });
-          if (!response.ok) {
-            const data = await response.json();
-            throw new Error(data.error || 'فشل تحديث التصنيف');
-          }
-          return { id, success: true };
-        } catch (error) {
-          return { id, success: false };
-        }
-      })
-    );
-    const successCount = results.filter((result) => result.success).length;
-    const failureCount = results.length - successCount;
-    if (successCount > 0) {
-      toast.success(`تم تحديث ${successCount} قناة`);
-    }
-    if (failureCount > 0) {
-      toast.error(`فشل تحديث ${failureCount} قناة`);
+      setParsedChannels(channels);
+      toast.success(`تم تحليل ${channels.length} قناة من القائمة`);
+      setLoadingChannels(false);
+    } catch (error) {
+      console.error('Error parsing playlist:', error);
+      toast.error('فشل في تحليل ملف القائمة');
+      setLoadingChannels(false);
     }
     setSelectedStreamIds(new Set());
     setBatchProcessing(false);
@@ -1146,64 +460,27 @@ export default function AdminDashboard() {
     });
   };
 
-  const handleCategoryDrop = async (event: React.DragEvent<HTMLDivElement>, categoryId?: string) => {
-    event.preventDefault();
-    const streamId = event.dataTransfer.getData('text/plain');
-    if (!streamId) return;
-    await updateStreamCategory(streamId, categoryId);
-    await fetchData();
+  const removeServerUrl = (index: number) => {
+    setStreamForm({
+      ...streamForm,
+      serverUrls: streamForm.serverUrls.filter((_, i) => i !== index),
+    });
   };
 
-  const handleExportBackup = async (format: 'json' | 'sql') => {
-    setBackupProcessing(true);
-    try {
-      const response = await fetch(`/api/admin/backup/export?format=${format}`);
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'فشل تصدير النسخة الاحتياطية');
-      }
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `backup.${format === 'sql' ? 'sql' : 'json'}`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
-      setLastBackupAt(new Date().toISOString());
-      toast.success('تم تنزيل النسخة الاحتياطية');
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'فشل تصدير النسخة الاحتياطية');
-    } finally {
-      setBackupProcessing(false);
-    }
+  const updateServerUrl = (index: number, value: string) => {
+    const newServerUrls = [...streamForm.serverUrls];
+    newServerUrls[index] = value;
+    setStreamForm({
+      ...streamForm,
+      serverUrls: newServerUrls,
+    });
   };
 
-  const handleExportChannels = async () => {
-    setBackupProcessing(true);
-    try {
-      const response = await fetch('/api/admin/streams/export');
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'فشل تصدير القنوات');
-      }
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = 'channels.csv';
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
-      toast.success('تم تنزيل قائمة القنوات');
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'فشل تصدير القنوات');
-    } finally {
-      setBackupProcessing(false);
+  const addSelectedChannels = async () => {
+    if (selectedChannels.length === 0) {
+      toast.error('الرجا تحديد قناة واحدة على الأقل');
+      return;
     }
-  };
 
   const handleExportAnalytics = async () => {
     setBackupProcessing(true);
@@ -1230,403 +507,151 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleImportBackup = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    setBackupProcessing(true);
+  // User operations
+  const handleCreateUser = async () => {
     try {
-      const text = await file.text();
-      const payload = JSON.parse(text);
-      const response = await fetch('/api/admin/backup/import', {
+      const response = await fetch('/api/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(userForm),
       });
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || 'فشل استعادة النسخة الاحتياطية');
-      }
-      toast.success('تمت استعادة النسخة الاحتياطية');
-      await fetchData();
+      if (!response.ok) throw new Error('Failed to create user');
+      toast.success('تم إنشاء المستخدم بنجاح');
+      setUserFormOpen(false);
+      resetUserForm();
+      fetchData();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'فشل استعادة النسخة الاحتياطية');
-    } finally {
-      setBackupProcessing(false);
-      event.target.value = '';
+      toast.error('فشل في إنشاء المستخدم');
     }
   };
 
-  const handlePreviewMetadata = async () => {
-    if (!previewUrl.trim()) {
-      toast.error('يرجى إدخال رابط البث');
-      return;
-    }
+  const handleUpdateUser = async () => {
+    if (!editingUser) return;
     try {
-      const response = await fetch('/api/admin/preview-info', {
-        method: 'POST',
+      const response = await fetch('/api/users', {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: previewUrl.trim() }),
+        body: JSON.stringify({ id: editingUser.id, ...userForm }),
       });
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || 'فشل تحميل معلومات البث');
-      }
-      setPreviewReport(data);
+      if (!response.ok) throw new Error('Failed to update user');
+      toast.success('تم تحديث المستخدم بنجاح');
+      setUserFormOpen(false);
+      setEditingUser(null);
+      resetUserForm();
+      fetchData();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'فشل تحميل معلومات البث');
+      toast.error('فشل في تحديث المستخدم');
     }
   };
 
-  const handleRunAiCategorization = async () => {
-    if (streams.length === 0) {
-      toast.error('لا توجد قنوات لتحليلها حالياً');
-      return;
-    }
-    setAiCategorizeRunning(true);
+  const handleDeleteUser = async (id: string) => {
     try {
-      const response = await fetch('/api/admin/ai-categorize', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          streams: streams.map((stream) => ({
-            id: stream.id,
-            title: stream.title,
-            description: stream.description,
-          })),
-        }),
+      await fetch(`/api/users?id=${id}`, { method: 'DELETE' });
+      toast.success('تم حذف المستخدم بنجاح');
+      fetchData();
+    } catch (error) {
+      toast.error('فشل في حذف المستخدم');
+    }
+  };
+
+  const openUserForm = (user?: User) => {
+    if (user) {
+      setEditingUser(user);
+      setUserForm({
+        email: user.email,
+        name: user.name || '',
+        password: '',
+        role: user.role,
       });
-      if (!response.ok) {
-        throw new Error('Failed to analyze streams');
-      }
-      const data = (await response.json()) as {
-        results: { id: string; title: string; category: string; confidence: number }[];
-      };
-      setAiCategorizeResults(data.results);
-      toast.success('تم إنشاء التصنيفات المقترحة بنجاح');
-    } catch (error) {
-      console.error('AI categorization error:', error);
-      toast.error('تعذر تشغيل التحليل الذكي الآن');
-    } finally {
-      setAiCategorizeRunning(false);
-    }
-  };
-
-  const handleSaveCdnConfig = async () => {
-    try {
-      const response = await fetch('/api/admin/cdn/config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(cdnConfig),
-      });
-      if (!response.ok) {
-        throw new Error('Failed to save CDN config');
-      }
-      const data = (await response.json()) as { message: string };
-      setCdnStatus(data.message);
-      toast.success('تم حفظ إعدادات الـ CDN');
-    } catch (error) {
-      console.error('CDN config error:', error);
-      toast.error('تعذر حفظ إعدادات الـ CDN');
-    }
-  };
-
-  const handleSaveLoadBalancing = async () => {
-    try {
-      const response = await fetch('/api/admin/load-balancing/config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(loadBalancingConfig),
-      });
-      if (!response.ok) {
-        throw new Error('Failed to save load balancing config');
-      }
-      const data = (await response.json()) as { message: string };
-      setLoadBalancingStatus(data.message);
-      toast.success('تم حفظ إعدادات موازنة الحمل');
-    } catch (error) {
-      console.error('Load balancing error:', error);
-      toast.error('تعذر حفظ إعدادات موازنة الحمل');
-    }
-  };
-
-  const handleSaveAutoScaling = async () => {
-    try {
-      const response = await fetch('/api/admin/auto-scaling/config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(autoScalingConfig),
-      });
-      if (!response.ok) {
-        throw new Error('Failed to save autoscaling config');
-      }
-      const data = (await response.json()) as { message: string };
-      setAutoScalingStatus(data.message);
-      toast.success('تم حفظ إعدادات التوسع التلقائي');
-    } catch (error) {
-      console.error('Autoscaling error:', error);
-      toast.error('تعذر حفظ إعدادات التوسع التلقائي');
-    }
-  };
-
-  const handleSaveOffsiteBackup = async () => {
-    try {
-      const response = await fetch('/api/admin/offsite-backup/config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(offsiteBackupConfig),
-      });
-      if (!response.ok) {
-        throw new Error('Failed to save offsite backup config');
-      }
-      const data = (await response.json()) as { message: string };
-      setOffsiteBackupStatus(data.message);
-      toast.success('تم حفظ إعدادات النسخ الاحتياطي الخارجي');
-    } catch (error) {
-      console.error('Offsite backup error:', error);
-      toast.error('تعذر حفظ إعدادات النسخ الاحتياطي الخارجي');
-    }
-  };
-
-  const handleRunOffsiteBackup = async () => {
-    try {
-      const response = await fetch('/api/admin/offsite-backup/run', { method: 'POST' });
-      if (!response.ok) {
-        throw new Error('Failed to run offsite backup');
-      }
-      const data = (await response.json()) as { ranAt: string; message: string };
-      setOffsiteBackupConfig((prev) => ({ ...prev, lastRunAt: data.ranAt }));
-      setOffsiteBackupStatus(data.message);
-      toast.success('تم تشغيل النسخ الاحتياطي الخارجي');
-    } catch (error) {
-      console.error('Offsite backup run error:', error);
-      toast.error('تعذر تشغيل النسخ الاحتياطي الخارجي');
-    }
-  };
-
-  const handleRunAbTest = async () => {
-    setAbTestingRunning(true);
-    try {
-      const response = await fetch('/api/admin/ab-testing/summary', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          servers: streams.flatMap((stream) =>
-            stream.servers.map((server) => ({
-              id: server.id,
-              name: server.name,
-              priority: server.priority,
-              streamId: stream.id,
-              streamTitle: stream.title,
-            }))
-          ),
-          config: abTestingConfig,
-        }),
-      });
-      if (!response.ok) {
-        throw new Error('Failed to run A/B test');
-      }
-      const data = (await response.json()) as {
-        totalRequests: number;
-        topServer?: { id: string; name: string; usage: number };
-        laggingServers: { id: string; name: string; usage: number }[];
-        failoverSuggested: boolean;
-        notes: string[];
-      };
-      setAbTestingReport(data);
-      toast.success('تم تحديث تقرير A/B');
-    } catch (error) {
-      console.error('A/B testing error:', error);
-      toast.error('تعذر تشغيل A/B حالياً');
-    } finally {
-      setAbTestingRunning(false);
-    }
-  };
-
-  const calculateNextRefresh = (interval: RefreshInterval) => {
-    const now = new Date();
-    if (interval === 'hourly') {
-      now.setHours(now.getHours() + 1);
-    } else if (interval === 'daily') {
-      now.setDate(now.getDate() + 1);
     } else {
-      now.setDate(now.getDate() + 7);
+      setEditingUser(null);
+      resetUserForm();
     }
-    return now.toISOString();
+    setUserFormOpen(true);
   };
 
-  const refreshPlaylist = async (config: PlaylistRefreshConfig) => {
-    if (refreshingIds.has(config.id)) return;
-    setRefreshingIds((prev) => new Set(prev).add(config.id));
-
-    try {
-      const response = await fetch('/api/playlists/parse', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ playlistUrl: config.url }),
-      });
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || 'فشل تحديث القائمة');
-      }
-
-      const channelUrls = (data.channels || [])
-        .map((channel: { url?: string }) => channel.url)
-        .filter(Boolean) as string[];
-      const previousChannels = new Set(config.channelUrls || []);
-      const currentChannels = new Set(channelUrls);
-      let addedChannels = 0;
-      let removedChannels = 0;
-
-      currentChannels.forEach((url) => {
-        if (!previousChannels.has(url)) addedChannels += 1;
-      });
-      previousChannels.forEach((url) => {
-        if (!currentChannels.has(url)) removedChannels += 1;
-      });
-
-      const historyEntry: RefreshHistoryEntry = {
-        id: crypto.randomUUID(),
-        timestamp: new Date().toISOString(),
-        status: 'success',
-        totalChannels: channelUrls.length,
-        addedChannels,
-        removedChannels,
-        message: 'تم تحديث القائمة بنجاح',
-      };
-
-      setRefreshConfigs((prev) =>
-        prev.map((item) =>
-          item.id === config.id
-            ? {
-                ...item,
-                channelUrls,
-                lastChannelCount: channelUrls.length,
-                lastRefreshedAt: new Date().toISOString(),
-                nextRefreshAt: calculateNextRefresh(item.interval),
-                lastStatus: 'success',
-                lastError: undefined,
-                history: [historyEntry, ...item.history].slice(0, 10),
-              }
-            : item
-        )
-      );
-      toast.success(`تم تحديث ${config.name}`);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'فشل تحديث القائمة';
-      const historyEntry: RefreshHistoryEntry = {
-        id: crypto.randomUUID(),
-        timestamp: new Date().toISOString(),
-        status: 'failed',
-        totalChannels: config.lastChannelCount || 0,
-        addedChannels: 0,
-        removedChannels: 0,
-        message,
-      };
-
-      setRefreshConfigs((prev) =>
-        prev.map((item) =>
-          item.id === config.id
-            ? {
-                ...item,
-                lastRefreshedAt: new Date().toISOString(),
-                nextRefreshAt: calculateNextRefresh(item.interval),
-                lastStatus: 'failed',
-                lastError: message,
-                history: [historyEntry, ...item.history].slice(0, 10),
-              }
-            : item
-        )
-      );
-
-      if (config.notifyEmail) {
-        try {
-          await fetch('/api/admin/playlist-refresh-notify', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              email: config.notifyEmail,
-              playlistName: config.name,
-              playlistUrl: config.url,
-              error: message,
-            }),
-          });
-          toast.error(`فشل تحديث ${config.name}، تم إرسال إشعار.`);
-        } catch (notifyError) {
-          console.error('Failed to notify about refresh failure:', notifyError);
-          toast.error(`فشل تحديث ${config.name}، تعذر إرسال الإشعار.`);
-        }
-      } else {
-        toast.error(`فشل تحديث ${config.name}`);
-      }
-    } finally {
-      setRefreshingIds((prev) => {
-        const next = new Set(prev);
-        next.delete(config.id);
-        return next;
-      });
-    }
-  };
-
-  const refreshDuePlaylists = () => {
-    const now = new Date();
-    refreshConfigs.forEach((config) => {
-      if (!config.nextRefreshAt) return;
-      if (refreshingIds.has(config.id)) return;
-      if (new Date(config.nextRefreshAt) <= now) {
-        void refreshPlaylist(config);
-      }
+  const resetUserForm = () => {
+    setUserForm({
+      email: '',
+      name: '',
+      password: '',
+      role: 'user',
     });
   };
 
-  const handleSaveRefreshConfig = () => {
-    if (!refreshForm.name || !refreshForm.url) {
-      toast.error('يرجى إدخال الاسم والرابط');
-      return;
+  // Ad operations
+  const handleCreateAd = async () => {
+    try {
+      const response = await fetch('/api/ads', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(adForm),
+      });
+      if (!response.ok) throw new Error('Failed to create ad');
+      toast.success('تم إنشاء الإعلان بنجاح');
+      setAdFormOpen(false);
+      resetAdForm();
+      fetchData();
+    } catch (error) {
+      toast.error('فشل في إنشاء الإعلان');
     }
-
-    if (editingRefresh) {
-      setRefreshConfigs((prev) =>
-        prev.map((config) =>
-          config.id === editingRefresh.id
-            ? {
-                ...config,
-                name: refreshForm.name,
-                url: refreshForm.url,
-                interval: refreshForm.interval,
-                notifyEmail: refreshForm.notifyEmail,
-                nextRefreshAt: calculateNextRefresh(refreshForm.interval),
-              }
-            : config
-        )
-      );
-      toast.success('تم تحديث إعدادات التحديث');
-    } else {
-      setRefreshConfigs((prev) => [
-        {
-          id: crypto.randomUUID(),
-          name: refreshForm.name,
-          url: refreshForm.url,
-          interval: refreshForm.interval,
-          notifyEmail: refreshForm.notifyEmail,
-          nextRefreshAt: calculateNextRefresh(refreshForm.interval),
-          history: [],
-        },
-        ...prev,
-      ]);
-      toast.success('تم إضافة جدول تحديث جديد');
-    }
-
-    setEditingRefresh(null);
-    setRefreshForm({ name: '', url: '', interval: 'daily', notifyEmail: '' });
   };
 
-  const handleEditRefreshConfig = (config: PlaylistRefreshConfig) => {
-    setEditingRefresh(config);
-    setRefreshForm({
-      name: config.name,
-      url: config.url,
-      interval: config.interval,
-      notifyEmail: config.notifyEmail,
+  const handleUpdateAd = async () => {
+    if (!editingAd) return;
+    try {
+      const response = await fetch('/api/ads', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: editingAd.id, ...adForm }),
+      });
+      if (!response.ok) throw new Error('Failed to update ad');
+      toast.success('تم تحديث الإعلان بنجاح');
+      setAdFormOpen(false);
+      setEditingAd(null);
+      resetAdForm();
+      fetchData();
+    } catch (error) {
+      toast.error('فشل في تحديث الإعلان');
+    }
+  };
+
+  const handleDeleteAd = async (id: string) => {
+    try {
+      await fetch(`/api/ads?id=${id}`, { method: 'DELETE' });
+      toast.success('تم حذف الإعلان بنجاح');
+      fetchData();
+    } catch (error) {
+      toast.error('فشل في حذف الإعلان');
+    }
+  };
+
+  const openAdForm = (ad?: Ad) => {
+    if (ad) {
+      setEditingAd(ad);
+      setAdForm({
+        streamId: '',
+        position: ad.position,
+        title: ad.title || '',
+        imageUrl: ad.imageUrl,
+        linkUrl: ad.linkUrl || '',
+        active: ad.active,
+      });
+    } else {
+      setEditingAd(null);
+      resetAdForm();
+    }
+    setAdFormOpen(true);
+  };
+
+  const resetAdForm = () => {
+    setAdForm({
+      streamId: '',
+      position: 'home-top',
+      title: '',
+      imageUrl: '',
+      linkUrl: '',
+      active: true,
     });
   };
 
@@ -4174,272 +3199,50 @@ export default function AdminDashboard() {
                     )}
                   </div>
                 )}
+              </Button>
+            </div>
+          </div>
 
-                {activeTab === 'infrastructure' && (
-                  <div className="space-y-6">
-                    <Card className="bg-slate-800/50 border-slate-700">
-                      <CardHeader className="border-b border-slate-700">
-                        <CardTitle className="text-white flex items-center gap-2">
-                          <Bot className="h-5 w-5 text-red-400" />
-                          الذكاء الاصطناعي لتصنيف القنوات
-                        </CardTitle>
-                        <CardDescription className="text-slate-400">
-                          تشغيل التحليل الذكي لاقتراح تصنيفات تلقائية للقنوات.
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent className="p-6 space-y-4">
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                          <p className="text-sm text-slate-300">
-                            سيتم تحليل العناوين والأوصاف لإنشاء تصنيفات مقترحة.
-                          </p>
-                          <Button
-                            className="bg-gradient-to-r from-red-600 to-red-700"
-                            onClick={handleRunAiCategorization}
-                            disabled={aiCategorizeRunning}
-                          >
-                            {aiCategorizeRunning ? 'جاري التحليل...' : 'تشغيل التحليل'}
-                          </Button>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                          {aiCategorizeResults.length === 0 ? (
-                            <div className="text-sm text-slate-400">
-                              لا توجد نتائج بعد. قم بتشغيل التحليل.
-                            </div>
-                          ) : (
-                            aiCategorizeResults.slice(0, 6).map((result) => (
-                              <div
-                                key={result.id}
-                                className="rounded-lg border border-slate-700 bg-slate-900/40 p-4"
-                              >
-                                <p className="text-slate-200 font-medium">{result.title}</p>
-                                <p className="text-xs text-slate-500">
-                                  التصنيف المقترح: {result.category}
-                                </p>
-                                <p className="text-xs text-slate-400">
-                                  نسبة الثقة: {Math.round(result.confidence * 100)}%
-                                </p>
-                              </div>
-                            ))
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
+          <nav className="p-4 space-y-2">
+            <Button
+              variant={activeTab === 'streams' ? 'default' : 'ghost'}
+              className={`w-full justify-start ${
+                activeTab === 'streams'
+                  ? 'bg-gradient-to-r from-red-600 to-red-700 text-white'
+                  : 'text-slate-300 hover:bg-slate-800'
+              }`}
+              onClick={() => setActiveTab('streams')}
+            >
+              <Tv className="h-5 w-5" />
+              {sidebarOpen && <span className="mr-2">البث المباشر</span>}
+            </Button>
 
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                      <Card className="bg-slate-800/50 border-slate-700">
-                        <CardHeader className="border-b border-slate-700">
-                          <CardTitle className="text-white flex items-center gap-2">
-                            <Cloud className="h-5 w-5 text-red-400" />
-                            تكامل CDN
-                          </CardTitle>
-                          <CardDescription className="text-slate-400">
-                            إعداد تكامل Cloudflare/Fastly لتسريع المحتوى عالمياً.
-                          </CardDescription>
-                        </CardHeader>
-                        <CardContent className="p-6 space-y-4">
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                              <Label className="text-slate-300">المزوّد</Label>
-                              <select
-                                value={cdnConfig.provider}
-                                onChange={(event) =>
-                                  setCdnConfig({ ...cdnConfig, provider: event.target.value })
-                                }
-                                className="w-full bg-slate-800 border border-slate-700 text-white rounded-md p-2"
-                              >
-                                <option value="cloudflare">Cloudflare</option>
-                                <option value="fastly">Fastly</option>
-                                <option value="akamai">Akamai</option>
-                              </select>
-                            </div>
-                            <div className="space-y-2">
-                              <Label className="text-slate-300">Zone/Service ID</Label>
-                              <Input
-                                value={cdnConfig.zoneId}
-                                onChange={(event) =>
-                                  setCdnConfig({ ...cdnConfig, zoneId: event.target.value })
-                                }
-                                className="bg-slate-800 border-slate-700 text-white"
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label className="text-slate-300">مدة التخزين المؤقت (ثانية)</Label>
-                              <Input
-                                type="number"
-                                value={cdnConfig.cacheTtl}
-                                onChange={(event) =>
-                                  setCdnConfig({
-                                    ...cdnConfig,
-                                    cacheTtl: Number(event.target.value),
-                                  })
-                                }
-                                className="bg-slate-800 border-slate-700 text-white"
-                              />
-                            </div>
-                            <div className="flex items-center justify-between rounded-lg border border-slate-700 p-3">
-                              <div>
-                                <p className="text-sm text-slate-200">تفعيل CDN</p>
-                                <p className="text-xs text-slate-500">
-                                  توزيع عالمي مع قواعد كاش مخصصة.
-                                </p>
-                              </div>
-                              <Switch
-                                checked={cdnConfig.enabled}
-                                onCheckedChange={(value) =>
-                                  setCdnConfig({ ...cdnConfig, enabled: value })
-                                }
-                              />
-                            </div>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <label className="flex items-center gap-2 text-sm text-slate-300">
-                              <input
-                                type="checkbox"
-                                checked={cdnConfig.purgeOnPublish}
-                                onChange={(event) =>
-                                  setCdnConfig({ ...cdnConfig, purgeOnPublish: event.target.checked })
-                                }
-                                className="h-4 w-4 accent-red-500"
-                              />
-                              مسح الكاش عند النشر
-                            </label>
-                            <Button
-                              variant="outline"
-                              className="border-slate-700 text-slate-300"
-                              onClick={handleSaveCdnConfig}
-                            >
-                              حفظ الإعدادات
-                            </Button>
-                          </div>
-                          {cdnStatus && <p className="text-xs text-slate-400">{cdnStatus}</p>}
-                        </CardContent>
-                      </Card>
+            <Button
+              variant={activeTab === 'users' ? 'default' : 'ghost'}
+              className={`w-full justify-start ${
+                activeTab === 'users'
+                  ? 'bg-gradient-to-r from-red-600 to-red-700 text-white'
+                  : 'text-slate-300 hover:bg-slate-800'
+              }`}
+              onClick={() => setActiveTab('users')}
+            >
+              <Users className="h-5 w-5" />
+              {sidebarOpen && <span className="mr-2">المستخدمون</span>}
+            </Button>
 
-                      <Card className="bg-slate-800/50 border-slate-700">
-                        <CardHeader className="border-b border-slate-700">
-                          <CardTitle className="text-white flex items-center gap-2">
-                            <ServerCog className="h-5 w-5 text-red-400" />
-                            موازنة الحمل
-                          </CardTitle>
-                          <CardDescription className="text-slate-400">
-                            توزيع الحمل عبر الخوادم وتقليل الأعطال.
-                          </CardDescription>
-                        </CardHeader>
-                        <CardContent className="p-6 space-y-4">
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                              <Label className="text-slate-300">الاستراتيجية</Label>
-                              <select
-                                value={loadBalancingConfig.strategy}
-                                onChange={(event) =>
-                                  setLoadBalancingConfig({
-                                    ...loadBalancingConfig,
-                                    strategy: event.target.value,
-                                  })
-                                }
-                                className="w-full bg-slate-800 border border-slate-700 text-white rounded-md p-2"
-                              >
-                                <option value="round-robin">Round Robin</option>
-                                <option value="least-connections">Least Connections</option>
-                                <option value="geo-aware">Geo Aware</option>
-                              </select>
-                            </div>
-                            <div className="space-y-2">
-                              <Label className="text-slate-300">رابط فحص الصحة</Label>
-                              <Input
-                                value={loadBalancingConfig.healthCheckUrl}
-                                onChange={(event) =>
-                                  setLoadBalancingConfig({
-                                    ...loadBalancingConfig,
-                                    healthCheckUrl: event.target.value,
-                                  })
-                                }
-                                placeholder="https://example.com/health"
-                                className="bg-slate-800 border-slate-700 text-white"
-                              />
-                            </div>
-                            <div className="flex items-center justify-between rounded-lg border border-slate-700 p-3">
-                              <div>
-                                <p className="text-sm text-slate-200">تبديل تلقائي</p>
-                                <p className="text-xs text-slate-500">تحويل الحركة عند الأعطال.</p>
-                              </div>
-                              <Switch
-                                checked={loadBalancingConfig.autoFailover}
-                                onCheckedChange={(value) =>
-                                  setLoadBalancingConfig({
-                                    ...loadBalancingConfig,
-                                    autoFailover: value,
-                                  })
-                                }
-                              />
-                            </div>
-                            <div className="flex items-center justify-between rounded-lg border border-slate-700 p-3">
-                              <div>
-                                <p className="text-sm text-slate-200">توزيع أوزان</p>
-                                <p className="text-xs text-slate-500">إعطاء أولوية لخادم رئيسي.</p>
-                              </div>
-                              <Switch
-                                checked={loadBalancingConfig.weighted}
-                                onCheckedChange={(value) =>
-                                  setLoadBalancingConfig({
-                                    ...loadBalancingConfig,
-                                    weighted: value,
-                                  })
-                                }
-                              />
-                            </div>
-                          </div>
-                          {loadBalancingConfig.weighted && (
-                            <div className="grid grid-cols-2 gap-4 text-sm text-slate-300">
-                              <div className="space-y-2">
-                                <Label className="text-slate-300">وزن الخادم الأساسي</Label>
-                                <Input
-                                  type="number"
-                                  value={loadBalancingConfig.primaryWeight}
-                                  onChange={(event) =>
-                                    setLoadBalancingConfig({
-                                      ...loadBalancingConfig,
-                                      primaryWeight: Number(event.target.value),
-                                    })
-                                  }
-                                  className="bg-slate-800 border-slate-700 text-white"
-                                />
-                              </div>
-                              <div className="space-y-2">
-                                <Label className="text-slate-300">وزن الخادم الثانوي</Label>
-                                <Input
-                                  type="number"
-                                  value={loadBalancingConfig.secondaryWeight}
-                                  onChange={(event) =>
-                                    setLoadBalancingConfig({
-                                      ...loadBalancingConfig,
-                                      secondaryWeight: Number(event.target.value),
-                                    })
-                                  }
-                                  className="bg-slate-800 border-slate-700 text-white"
-                                />
-                              </div>
-                            </div>
-                          )}
-                          <div className="flex items-center justify-between">
-                            <p className="text-xs text-slate-400">
-                              نسبة توزيع الخوادم الحالية: {loadBalancingConfig.primaryWeight}% /
-                              {loadBalancingConfig.secondaryWeight}%
-                            </p>
-                            <Button
-                              variant="outline"
-                              className="border-slate-700 text-slate-300"
-                              onClick={handleSaveLoadBalancing}
-                            >
-                              حفظ الإعدادات
-                            </Button>
-                          </div>
-                          {loadBalancingStatus && (
-                            <p className="text-xs text-slate-400">{loadBalancingStatus}</p>
-                          )}
-                        </CardContent>
-                      </Card>
-                    </div>
+            <Button
+              variant={activeTab === 'ads' ? 'default' : 'ghost'}
+              className={`w-full justify-start ${
+                activeTab === 'ads'
+                  ? 'bg-gradient-to-r from-red-600 to-red-700 text-white'
+                  : 'text-slate-300 hover:bg-slate-800'
+              }`}
+              onClick={() => setActiveTab('ads')}
+            >
+              <ImageIcon className="h-5 w-5" />
+              {sidebarOpen && <span className="mr-2">الإعلانات</span>}
+            </Button>
+          </nav>
 
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                       <Card className="bg-slate-800/50 border-slate-700">
@@ -4469,573 +3272,370 @@ export default function AdminDashboard() {
                               />
                             </div>
                             <div className="space-y-2">
-                              <Label className="text-slate-300">الحد الأعلى للخوادم</Label>
+                              <Label className="text-slate-300">العنوان</Label>
                               <Input
-                                type="number"
-                                value={autoScalingConfig.maxServers}
-                                onChange={(event) =>
-                                  setAutoScalingConfig({
-                                    ...autoScalingConfig,
-                                    maxServers: Number(event.target.value),
-                                  })
+                                value={streamForm.title}
+                                onChange={(e) =>
+                                  setStreamForm({ ...streamForm, title: e.target.value })
                                 }
                                 className="bg-slate-800 border-slate-700 text-white"
                               />
                             </div>
                             <div className="space-y-2">
-                              <Label className="text-slate-300">هدف CPU %</Label>
-                              <Input
-                                type="number"
-                                value={autoScalingConfig.targetCpu}
-                                onChange={(event) =>
-                                  setAutoScalingConfig({
-                                    ...autoScalingConfig,
-                                    targetCpu: Number(event.target.value),
-                                  })
-                                }
-                                className="bg-slate-800 border-slate-700 text-white"
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label className="text-slate-300">فترة التهدئة (دقيقة)</Label>
-                              <Input
-                                type="number"
-                                value={autoScalingConfig.cooldownMinutes}
-                                onChange={(event) =>
-                                  setAutoScalingConfig({
-                                    ...autoScalingConfig,
-                                    cooldownMinutes: Number(event.target.value),
-                                  })
-                                }
-                                className="bg-slate-800 border-slate-700 text-white"
-                              />
-                            </div>
-                          </div>
-                          <div className="flex items-center justify-between rounded-lg border border-slate-700 p-3">
-                            <div>
-                              <p className="text-sm text-slate-200">تفعيل التوسع التلقائي</p>
+                              <Label htmlFor="description" className="text-slate-300 font-semibold">
+                                وصف القناة
+                              </Label>
                               <p className="text-xs text-slate-500">
-                                يتم التوسع تلقائياً عند تجاوز المؤشرات المحددة.
+                                اكف وصفاً مفصلاً للقناة لتحسين محركات البحث (SEO)
                               </p>
+                              <Textarea
+                                id="description"
+                                value={streamForm.description}
+                                onChange={(e) =>
+                                  setStreamForm({ ...streamForm, description: e.target.value })
+                                }
+                                placeholder="اكتب وصفاً مفصلاً للقناة هنا... مثال: قناة إخبارية تبث الأخبار على مدار الساعة بجودة عالية"
+                                className="bg-slate-800 border-slate-700 text-white min-h-[120px] resize-y"
+                                maxLength={2000}
+                              />
+                              <div className="flex items-center justify-between text-xs">
+                                <p className="text-slate-500">
+                                  أضف كلمات مفتاحية مثل: أخبار، رياضة، ترفيه، بث مباشر
+                                </p>
+                                <p className="text-slate-400">
+                                  {streamForm.description.length} / 2000
+                                </p>
+                              </div>
                             </div>
-                            <Switch
-                              checked={autoScalingConfig.enabled}
-                              onCheckedChange={(value) =>
-                                setAutoScalingConfig({ ...autoScalingConfig, enabled: value })
-                              }
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label className="text-slate-300">ملاحظات الجدولة</Label>
-                            <Textarea
-                              value={autoScalingConfig.scheduleNote}
-                              onChange={(event) =>
-                                setAutoScalingConfig({
-                                  ...autoScalingConfig,
-                                  scheduleNote: event.target.value,
-                                })
-                              }
-                              placeholder="مثال: زيادة السعة بين 6 مساءً - 11 مساءً."
-                              className="bg-slate-800 border-slate-700 text-white"
-                            />
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <p className="text-xs text-slate-400">
-                              نطاق التوسع الحالي: {autoScalingConfig.minServers} -{' '}
-                              {autoScalingConfig.maxServers} خادم.
-                            </p>
-                            <Button
-                              variant="outline"
-                              className="border-slate-700 text-slate-300"
-                              onClick={handleSaveAutoScaling}
-                            >
-                              حفظ الإعدادات
-                            </Button>
-                          </div>
-                          {autoScalingStatus && (
-                            <p className="text-xs text-slate-400">{autoScalingStatus}</p>
-                          )}
-                        </CardContent>
-                      </Card>
+                            <div className="space-y-2">
+                              <Label className="text-slate-300">رابط الصورة المصغرة</Label>
+                              <Input
+                                value={streamForm.thumbnail}
+                                onChange={(e) =>
+                                  setStreamForm({ ...streamForm, thumbnail: e.target.value })
+                                }
+                                placeholder="https://..."
+                                className="bg-slate-800 border-slate-700 text-white"
+                              />
+                            </div>
 
-                      <Card className="bg-slate-800/50 border-slate-700">
-                        <CardHeader className="border-b border-slate-700">
-                          <CardTitle className="text-white flex items-center gap-2">
-                            <Database className="h-5 w-5 text-red-400" />
-                            النسخ الاحتياطي الخارجي
-                          </CardTitle>
-                          <CardDescription className="text-slate-400">
-                            إرسال النسخ الاحتياطية إلى مزود خارجي آمن.
-                          </CardDescription>
-                        </CardHeader>
-                        <CardContent className="p-6 space-y-4">
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                              <Label className="text-slate-300">المزوّد</Label>
-                              <select
-                                value={offsiteBackupConfig.provider}
-                                onChange={(event) =>
-                                  setOffsiteBackupConfig({
-                                    ...offsiteBackupConfig,
-                                    provider: event.target.value,
-                                  })
-                                }
-                                className="w-full bg-slate-800 border border-slate-700 text-white rounded-md p-2"
-                              >
-                                <option value="s3">Amazon S3</option>
-                                <option value="backblaze">Backblaze</option>
-                                <option value="gcs">Google Cloud Storage</option>
-                              </select>
+                            {/* M3U Playlist URL Section */}
+                            <div className="space-y-2 pt-4 border-t border-slate-700">
+                              <Label htmlFor="playlist" className="text-slate-300 font-semibold">
+                                رابط ملف القوائم M3U (اختياري)
+                              </Label>
+                              <p className="text-xs text-slate-500">
+                                يمكنك إضافة ملف قائمة M3U واحد بدلاً من إضافة روابط فردية
+                              </p>
+                              <div className="flex gap-2">
+                                <Input
+                                  id="playlist"
+                                  value={streamForm.playlistUrl}
+                                  onChange={(e) =>
+                                    setStreamForm({ ...streamForm, playlistUrl: e.target.value })
+                                  }
+                                  placeholder="https://example.com/playlist.m3u"
+                                  className="bg-slate-800 border-slate-700 text-white flex-1"
+                                />
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  onClick={handleParsePlaylist}
+                                  disabled={loadingChannels || !streamForm.playlistUrl}
+                                  className="border-slate-700 text-slate-300 whitespace-nowrap"
+                                >
+                                  {loadingChannels ? (
+                                    <>
+                                      <div className="mr-2 h-4 w-4 border-2 border-slate-500 border-t-transparent animate-spin" />
+                                      تحليل...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-2a2 2 0 012-12V7a2 2 0 01-2-2-2-2z" />
+                                      </svg>
+                                      تحليل
+                                    </>
+                                  )}
+                                </Button>
+                              </div>
+                              {parsedChannels.length > 0 && (
+                                <div className="mt-3 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                                  <p className="text-sm text-blue-200 mb-2">
+                                    <span className="font-semibold">تم العثور على {parsedChannels.length} قناة!</span>
+                                    <span className="mx-2">|</span>
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={toggleAllChannels}
+                                      className="border-blue-400 text-blue-300 text-xs"
+                                    >
+                                      {selectedChannels.length === parsedChannels.length ? 'إلغاء تحديد الكل' : `تحديد الكل (${parsedChannels.length})`}
+                                    </Button>
+                                  </p>
+                                  <Button
+                                    type="button"
+                                    onClick={addSelectedChannels}
+                                    disabled={selectedChannels.length === 0}
+                                    size="sm"
+                                    className="bg-blue-600 hover:bg-blue-700 text-white text-xs"
+                                  >
+                                    <Plus className="h-3 w-3 mr-1" />
+                                    إضافة إلى البث ({selectedChannels.length})
+                                  </Button>
+                                </div>
+                              )}
+
+                              {/* Channel List */}
+                              {parsedChannels.length > 0 && (
+                                <div className="mt-3 max-h-60 overflow-y-auto border border-slate-700 rounded-lg bg-slate-900/50">
+                                  {parsedChannels.slice(0, 50).map((channel, index) => (
+                                    <div
+                                      key={`${channel.url}-${index}`}
+                                      className="flex items-center gap-3 p-2 hover:bg-slate-800/50 border-b border-slate-800 last:border-b-0 cursor-pointer"
+                                      onClick={() => toggleChannelSelection(channel)}
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        checked={selectedChannels.some(c => c.url === channel.url)}
+                                        onChange={() => {}}
+                                        className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-blue-600 focus:ring-blue-500"
+                                      />
+                                      {channel.logo && (
+                                        <img
+                                          src={channel.logo}
+                                          alt={channel.channelName || ''}
+                                          className="w-8 h-8 object-contain"
+                                          onError={(e) => {
+                                            (e.target as HTMLImageElement).style.display = 'none';
+                                          }}
+                                        />
+                                      )}
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-sm text-white truncate">
+                                          {channel.channelName || `قناة ${index + 1}`}
+                                        </p>
+                                        {channel.channelId && (
+                                          <p className="text-xs text-slate-400">ID: {channel.channelId}</p>
+                                        )}
+                                      </div>
+                                    </div>
+                                  ))}
+                                  {parsedChannels.length > 50 && (
+                                    <div className="p-3 text-center text-sm text-slate-400">
+                                      وجدنا {parsedChannels.length} قناة، يتم عرض أول 50 قناة فقط
+                                    </div>
+                                  )}
+                                </div>
+                              )}
                             </div>
-                            <div className="space-y-2">
-                              <Label className="text-slate-300">اسم الحاوية</Label>
-                              <Input
-                                value={offsiteBackupConfig.bucket}
-                                onChange={(event) =>
-                                  setOffsiteBackupConfig({
-                                    ...offsiteBackupConfig,
-                                    bucket: event.target.value,
-                                  })
+
+                            {/* Server URLs Section */}
+                            <div className="space-y-4 pt-4 border-t border-slate-700">
+                              <div className="flex items-center justify-between">
+                                <Label className="text-slate-300 text-base font-semibold">
+                                  روابط البث (M3U/M3U8)
+                                </Label>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={addServerUrl}
+                                  className="border-slate-600 text-slate-300"
+                                >
+                                  <Plus className="h-4 w-4 mr-1" />
+                                  إضافة خادم
+                                </Button>
+                              </div>
+                              <p className="text-xs text-slate-500">
+                                أضف روابط البث المباشرة للخوادم المختلفة (يمكنك إضافة عدد غير محدود)
+                              </p>
+
+                              <div className="space-y-3 max-h-80 overflow-y-auto">
+                                {streamForm.serverUrls.map((url, index) => (
+                                  <div key={index} className="flex items-start gap-2">
+                                    <div className="flex-1 space-y-2">
+                                      <Label htmlFor={`server-${index}`} className="text-slate-300">
+                                        الخادم {index + 1}
+                                      </Label>
+                                      <Input
+                                        id={`server-${index}`}
+                                        value={url}
+                                        onChange={(e) => updateServerUrl(index, e.target.value)}
+                                        placeholder="https://example.com/stream.m3u8"
+                                        className="bg-slate-800 border-slate-700 text-white"
+                                      />
+                                    </div>
+                                    {streamForm.serverUrls.length > 1 && (
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => removeServerUrl(index)}
+                                        className="mt-5 text-red-400 hover:text-red-300 hover:bg-red-900/20"
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+
+                            <div className="flex items-center space-x-2 space-x-reverse">
+                              <Switch
+                                id="published"
+                                checked={streamForm.published}
+                                onCheckedChange={(checked) =>
+                                  setStreamForm({ ...streamForm, published: checked })
                                 }
-                                className="bg-slate-800 border-slate-700 text-white"
                               />
-                            </div>
-                            <div className="space-y-2">
-                              <Label className="text-slate-300">المنطقة</Label>
-                              <Input
-                                value={offsiteBackupConfig.region}
-                                onChange={(event) =>
-                                  setOffsiteBackupConfig({
-                                    ...offsiteBackupConfig,
-                                    region: event.target.value,
-                                  })
-                                }
-                                className="bg-slate-800 border-slate-700 text-white"
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label className="text-slate-300">الجدولة</Label>
-                              <select
-                                value={offsiteBackupConfig.schedule}
-                                onChange={(event) =>
-                                  setOffsiteBackupConfig({
-                                    ...offsiteBackupConfig,
-                                    schedule: event.target.value,
-                                  })
-                                }
-                                className="w-full bg-slate-800 border border-slate-700 text-white rounded-md p-2"
-                              >
-                                <option value="daily">يومي</option>
-                                <option value="weekly">أسبوعي</option>
-                                <option value="monthly">شهري</option>
-                              </select>
+                              <Label htmlFor="published" className="text-slate-300">
+                                نشر الآن
+                              </Label>
                             </div>
                           </div>
-                          <div className="flex items-center justify-between rounded-lg border border-slate-700 p-3">
-                            <div>
-                              <p className="text-sm text-slate-200">تشفير النسخ الاحتياطية</p>
-                              <p className="text-xs text-slate-500">تفعيل تشفير قبل الإرسال.</p>
-                            </div>
-                            <Switch
-                              checked={offsiteBackupConfig.encryption}
-                              onCheckedChange={(value) =>
-                                setOffsiteBackupConfig({
-                                  ...offsiteBackupConfig,
-                                  encryption: value,
-                                })
-                              }
-                            />
-                          </div>
-                          <div className="flex flex-wrap items-center justify-between gap-3">
+                          <DialogFooter>
                             <Button
                               variant="outline"
+                              onClick={() => setStreamFormOpen(false)}
                               className="border-slate-700 text-slate-300"
-                              onClick={handleSaveOffsiteBackup}
                             >
-                              حفظ الإعدادات
+                              إلغاء
                             </Button>
                             <Button
+                              onClick={editingStream ? handleUpdateStream : handleCreateStream}
                               className="bg-gradient-to-r from-red-600 to-red-700"
-                              onClick={handleRunOffsiteBackup}
                             >
-                              تشغيل نسخة خارجية الآن
+                              {editingStream ? 'حفظ التعديلات' : 'إضافة'}
                             </Button>
-                          </div>
-                          <div className="text-xs text-slate-400">
-                            آخر تشغيل:{' '}
-                            {offsiteBackupConfig.lastRunAt
-                              ? new Date(offsiteBackupConfig.lastRunAt).toLocaleString('ar')
-                              : 'لم يتم بعد'}
-                          </div>
-                          {offsiteBackupStatus && (
-                            <p className="text-xs text-slate-400">{offsiteBackupStatus}</p>
-                          )}
-                        </CardContent>
-                      </Card>
+                          </DialogFooter>
+                        </DialogContent>
+                      </Dialog>
                     </div>
-                  </div>
-                )}
 
-                {activeTab === 'abTesting' && (
-                  <div className="space-y-6">
-                    <Card className="bg-slate-800/50 border-slate-700">
-                      <CardHeader className="border-b border-slate-700">
-                        <CardTitle className="text-white flex items-center gap-2">
-                          <BarChart3 className="h-5 w-5 text-red-400" />
-                          مقارنة أداء الخوادم
-                        </CardTitle>
-                        <CardDescription className="text-slate-400">
-                          تتبع الخادم الأكثر استخداماً واقتراحات إزالة الخوادم منخفضة الأداء.
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent className="p-6 space-y-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <Label className="text-slate-300">نافذة القياس (بالدقائق)</Label>
-                            <Input
-                              type="number"
-                              value={abTestingConfig.sampleWindowMinutes}
-                              onChange={(event) =>
-                                setAbTestingConfig({
-                                  ...abTestingConfig,
-                                  sampleWindowMinutes: Number(event.target.value),
-                                })
-                              }
-                              className="bg-slate-800 border-slate-700 text-white"
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label className="text-slate-300">الحد الأدنى للعينات</Label>
-                            <Input
-                              type="number"
-                              value={abTestingConfig.minSamples}
-                              onChange={(event) =>
-                                setAbTestingConfig({
-                                  ...abTestingConfig,
-                                  minSamples: Number(event.target.value),
-                                })
-                              }
-                              className="bg-slate-800 border-slate-700 text-white"
-                            />
-                          </div>
-                        </div>
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                          <div className="flex items-center gap-4">
-                            <label className="flex items-center gap-2 text-sm text-slate-300">
-                              <input
-                                type="checkbox"
-                                checked={abTestingConfig.removeLowPriority}
-                                onChange={(event) =>
-                                  setAbTestingConfig({
-                                    ...abTestingConfig,
-                                    removeLowPriority: event.target.checked,
-                                  })
-                                }
-                                className="h-4 w-4 accent-red-500"
-                              />
-                              إزالة الخوادم منخفضة الأداء تلقائياً
-                            </label>
-                            <label className="flex items-center gap-2 text-sm text-slate-300">
-                              <input
-                                type="checkbox"
-                                checked={abTestingConfig.failoverEnabled}
-                                onChange={(event) =>
-                                  setAbTestingConfig({
-                                    ...abTestingConfig,
-                                    failoverEnabled: event.target.checked,
-                                  })
-                                }
-                                className="h-4 w-4 accent-red-500"
-                              />
-                              تفعيل التحويل التلقائي (Failover)
-                            </label>
-                          </div>
-                          <Button
-                            className="bg-gradient-to-r from-red-600 to-red-700"
-                            onClick={handleRunAbTest}
-                            disabled={abTestingRunning}
-                          >
-                            {abTestingRunning ? 'جاري القياس...' : 'تشغيل الاختبار'}
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    {abTestingReport && (
-                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        <Card className="bg-slate-800/50 border-slate-700">
-                          <CardHeader className="border-b border-slate-700">
-                            <CardTitle className="text-white">الخادم الأفضل</CardTitle>
-                            <CardDescription className="text-slate-400">
-                              أكثر خادم تم اختياره في الفترة الأخيرة.
-                            </CardDescription>
-                          </CardHeader>
-                          <CardContent className="p-6">
-                            <p className="text-sm text-slate-400">إجمالي الطلبات</p>
-                            <p className="text-3xl text-white mb-4">
-                              {abTestingReport.totalRequests}
-                            </p>
-                            <div className="rounded-lg border border-slate-700 bg-slate-900/40 p-4">
-                              <p className="text-slate-300 text-sm">الخادم الأعلى</p>
-                              <p className="text-white text-xl">
-                                {abTestingReport.topServer?.name ?? 'غير متوفر'}
-                              </p>
-                              <p className="text-xs text-slate-400">
-                                نسبة الاستخدام: {abTestingReport.topServer?.usage ?? 0}%
-                              </p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {streams.map((stream) => (
+                        <Card key={stream.id} className="bg-slate-800/50 border-slate-700">
+                          <CardHeader>
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <CardTitle className="text-white text-lg">
+                                  {stream.title}
+                                </CardTitle>
+                                <CardDescription className="text-slate-400 mt-2">
+                                  {stream.description || 'لا يوجد وصف'}
+                                </CardDescription>
+                              </div>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="text-slate-400 hover:text-white"
+                                  >
+                                    <MoreVertical className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent className="bg-slate-900 border-slate-700">
+                                  <DropdownMenuItem
+                                    onClick={() => openStreamForm(stream)}
+                                    className="text-slate-300 hover:bg-slate-800"
+                                  >
+                                    <Edit className="mr-2 h-4 w-4" />
+                                    تعديل
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => handleDeleteStream(stream.id)}
+                                    className="text-red-400 hover:bg-slate-800"
+                                  >
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                    حذف
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             </div>
-                          </CardContent>
-                        </Card>
-
-                        <Card className="bg-slate-800/50 border-slate-700">
-                          <CardHeader className="border-b border-slate-700">
-                            <CardTitle className="text-white">الخوادم المتعثرة</CardTitle>
-                            <CardDescription className="text-slate-400">
-                              خوادم منخفضة الأداء بحاجة لإعادة توزيع.
-                            </CardDescription>
                           </CardHeader>
-                          <CardContent className="p-6 space-y-3">
-                            {abTestingReport.laggingServers.length === 0 ? (
-                              <p className="text-sm text-slate-400">لا توجد خوادم متعثرة حالياً.</p>
-                            ) : (
-                              abTestingReport.laggingServers.map((server) => (
+                          <CardContent>
+                            {stream.thumbnail && (
+                              <img
+                                src={stream.thumbnail}
+                                alt={stream.title}
+                                className="w-full h-32 object-cover rounded-lg mb-4"
+                              />
+                            )}
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-slate-400">
+                                {stream.servers.length} خادم
+                              </span>
+                              <span
+                                className={`px-2 py-1 rounded ${
+                                  stream.published
+                                    ? 'bg-green-500/20 text-green-400'
+                                    : 'bg-yellow-500/20 text-yellow-400'
+                                }`}
+                              >
+                                {stream.published ? 'منشور' : 'مسودة'}
+                              </span>
+                            </div>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="w-full mt-4 border-slate-700 text-slate-300"
+                              onClick={() => openServerForm(stream.id)}
+                            >
+                              <Plus className="mr-2 h-4 w-4" />
+                              إضافة خادم
+                            </Button>
+                            <div className="mt-4 space-y-2">
+                              {stream.servers.map((server) => (
                                 <div
                                   key={server.id}
-                                  className="rounded-lg border border-slate-700 bg-slate-900/40 p-3"
+                                  className="flex items-center justify-between bg-slate-900/50 p-3 rounded-lg"
                                 >
-                                  <p className="text-slate-200">{server.name}</p>
-                                  <p className="text-xs text-slate-400">
-                                    الاستخدام: {server.usage}%
-                                  </p>
+                                  <div className="flex-1">
+                                    <p className="text-white text-sm font-medium">
+                                      {server.name}
+                                    </p>
+                                    <p className="text-slate-500 text-xs truncate">
+                                      {server.url}
+                                    </p>
+                                  </div>
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="text-slate-400 hover:text-white"
+                                      >
+                                        <MoreVertical className="h-4 w-4" />
+                                      </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent className="bg-slate-900 border-slate-700">
+                                      <DropdownMenuItem
+                                        onClick={() => openServerForm(stream.id, server)}
+                                        className="text-slate-300 hover:bg-slate-800"
+                                      >
+                                        <Edit className="mr-2 h-4 w-4" />
+                                        تعديل
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem
+                                        onClick={() => handleDeleteServer(server.id)}
+                                        className="text-red-400 hover:bg-slate-800"
+                                      >
+                                        <Trash2 className="mr-2 h-4 w-4" />
+                                        حذف
+                                      </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
                                 </div>
-                              ))
-                            )}
-                          </CardContent>
-                        </Card>
-
-                        <Card className="bg-slate-800/50 border-slate-700">
-                          <CardHeader className="border-b border-slate-700">
-                            <CardTitle className="text-white">توصيات التحويل</CardTitle>
-                            <CardDescription className="text-slate-400">
-                              اقتراحات للتحويل التلقائي وإزالة الأولويات.
-                            </CardDescription>
-                          </CardHeader>
-                          <CardContent className="p-6 space-y-3">
-                            <div className="rounded-lg border border-slate-700 bg-slate-900/40 p-3">
-                              <p className="text-sm text-slate-300">حالة الـ Failover</p>
-                              <p className="text-lg text-white">
-                                {abTestingReport.failoverSuggested ? 'مستحسن التفعيل' : 'مستقر حالياً'}
-                              </p>
-                            </div>
-                            <ul className="text-xs text-slate-400 space-y-2">
-                              {abTestingReport.notes.map((note, index) => (
-                                <li key={index}>• {note}</li>
                               ))}
-                            </ul>
+                            </div>
                           </CardContent>
                         </Card>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {activeTab === 'featureFlags' && (
-                  <div className="space-y-6">
-                    <Card className="bg-slate-800/50 border-slate-700">
-                      <CardHeader className="border-b border-slate-700">
-                        <CardTitle className="text-white">تشغيل ميزات الموقع</CardTitle>
-                        <CardDescription className="text-slate-400">
-                          فعّل أو عطّل الميزات المرئية للمستخدمين في الواجهة الرئيسية وصفحات القنوات.
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent className="p-6 space-y-6">
-                        <div className="flex flex-wrap items-center gap-3">
-                          <Button
-                            className="bg-gradient-to-r from-red-600 to-red-700"
-                            onClick={() =>
-                              setFeatureFlags((prev) =>
-                                Object.fromEntries(Object.keys(prev).map((key) => [key, true])) as typeof prev
-                              )
-                            }
-                          >
-                            تفعيل الكل
-                          </Button>
-                          <Button
-                            variant="outline"
-                            className="border-slate-700 text-slate-300"
-                            onClick={() =>
-                              setFeatureFlags((prev) =>
-                                Object.fromEntries(Object.keys(prev).map((key) => [key, false])) as typeof prev
-                              )
-                            }
-                          >
-                            تعطيل الكل
-                          </Button>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {[
-                            { key: 'aiRecommendations', label: 'توصيات الذكاء الاصطناعي' },
-                            { key: 'pushNotifications', label: 'إشعارات الدفع' },
-                            { key: 'engagementAnalytics', label: 'تحليلات التفاعل' },
-                            { key: 'appsSection', label: 'روابط تطبيقات الهاتف والتلفزيون' },
-                            { key: 'offlineMode', label: 'الوضع دون اتصال' },
-                            { key: 'accessibility', label: 'خيارات إمكانية الوصول' },
-                            { key: 'userFeatures', label: 'المفضلة + المشاهدة الأخيرة' },
-                            { key: 'quickActions', label: 'القائمة السريعة داخل البطاقات' },
-                            { key: 'streamServerSelect', label: 'محدد سيرفرات البث في صفحة القناة' },
-                            { key: 'streamShortcuts', label: 'اختصارات لوحة المفاتيح في صفحة القناة' },
-                            { key: 'streamPip', label: 'زر PiP في صفحة القناة' },
-                            { key: 'streamPerformance', label: 'لوحة الأداء في صفحة القناة' },
-                            { key: 'streamRatings', label: 'التقييمات والمراجعات في صفحة القناة' },
-                            { key: 'streamSharing', label: 'مشاركة القناة في صفحة القناة' },
-                            { key: 'streamEpg', label: 'دليل البرامج (EPG) في صفحة القناة' },
-                            { key: 'liveChat', label: 'الدردشة المباشرة' },
-                            { key: 'webRtc', label: 'وضع WebRTC منخفض التأخير' },
-                          ].map((feature) => (
-                            <div
-                              key={feature.key}
-                              className="flex items-center justify-between rounded-lg border border-slate-700 bg-slate-900/40 p-4"
-                            >
-                              <span className="text-sm text-slate-200">{feature.label}</span>
-                              <Switch
-                                checked={featureFlags[feature.key as keyof typeof featureFlags]}
-                                onCheckedChange={(value) =>
-                                  setFeatureFlags((prev) => ({
-                                    ...prev,
-                                    [feature.key]: value,
-                                  }))
-                                }
-                              />
-                            </div>
-                          ))}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </div>
-                )}
-
-                {activeTab === 'siteSettings' && (
-                  <div className="space-y-6">
-                    <Card className="bg-slate-800/50 border-slate-700">
-                      <CardHeader className="border-b border-slate-700">
-                        <CardTitle className="text-white">إعدادات الهوية البصرية</CardTitle>
-                        <CardDescription className="text-slate-400">
-                          خصّص أيقونة الموقع، العنوان، اللون الأساسي والخط.
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent className="p-6 space-y-6">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <Label className="text-slate-300">عنوان الموقع</Label>
-                            <Input
-                              value={siteSettings.title}
-                              onChange={(event) =>
-                                setSiteSettings((prev) => ({ ...prev, title: event.target.value }))
-                              }
-                              className="bg-slate-800 border-slate-700 text-white"
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label className="text-slate-300">لون الموقع الأساسي</Label>
-                            <div className="flex items-center gap-3">
-                              <Input
-                                type="color"
-                                value={siteSettings.primaryColor}
-                                onChange={(event) =>
-                                  setSiteSettings((prev) => ({ ...prev, primaryColor: event.target.value }))
-                                }
-                                className="h-10 w-14 bg-slate-800 border-slate-700 p-1"
-                              />
-                              <Input
-                                value={siteSettings.primaryColor}
-                                onChange={(event) =>
-                                  setSiteSettings((prev) => ({ ...prev, primaryColor: event.target.value }))
-                                }
-                                className="bg-slate-800 border-slate-700 text-white"
-                              />
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <Label className="text-slate-300">أيقونة الموقع (رابط)</Label>
-                            <Input
-                              value={siteSettings.faviconUrl}
-                              onChange={(event) =>
-                                setSiteSettings((prev) => ({ ...prev, faviconUrl: event.target.value }))
-                              }
-                              placeholder="https://..."
-                              className="bg-slate-800 border-slate-700 text-white"
-                            />
-                            <input
-                              type="file"
-                              accept="image/*"
-                              onChange={(event) => handleFaviconUpload(event.target.files?.[0] ?? null)}
-                              className="text-xs text-slate-400"
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label className="text-slate-300">خط الموقع (رابط)</Label>
-                            <Input
-                              value={siteSettings.fontUrl}
-                              onChange={(event) =>
-                                setSiteSettings((prev) => ({ ...prev, fontUrl: event.target.value }))
-                              }
-                              placeholder="https://.../font.woff2"
-                              className="bg-slate-800 border-slate-700 text-white"
-                            />
-                            <input
-                              type="file"
-                              accept=".woff,.woff2,.ttf,.otf"
-                              onChange={(event) => handleFontUpload(event.target.files?.[0] ?? null)}
-                              className="text-xs text-slate-400"
-                            />
-                          </div>
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label className="text-slate-300">اسم الخط</Label>
-                          <Input
-                            value={siteSettings.fontName}
-                            onChange={(event) =>
-                              setSiteSettings((prev) => ({ ...prev, fontName: event.target.value }))
-                            }
-                            placeholder="Cairo"
-                            className="bg-slate-800 border-slate-700 text-white"
-                          />
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    <Card className="bg-slate-800/50 border-slate-700">
-                      <CardHeader className="border-b border-slate-700">
-                        <CardTitle className="text-white">القنوات المميزة</CardTitle>
-                        <CardDescription className="text-slate-400">
-                          أضف معرفات القنوات ليتم تثبيتها في الصفحة الرئيسية.
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent className="p-6 space-y-4">
-                        <Textarea
-                          value={featuredInput}
-                          onChange={(event) => setFeaturedInput(event.target.value)}
-                          placeholder="stream-id-1, stream-id-2"
-                          className="bg-slate-800 border-slate-700 text-white min-h-[120px]"
-                        />
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                          <span className="text-xs text-slate-400">
-                            سيتم حفظ القائمة وتثبيت القنوات في الواجهة الرئيسية.
-                          </span>
-                          <Button
-                            onClick={applyFeaturedStreams}
-                            className="bg-gradient-to-r from-red-600 to-red-700"
-                          >
-                            حفظ القنوات المميزة
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
+                      ))}
+                    </div>
                   </div>
                 )}
 
@@ -5111,22 +3711,6 @@ export default function AdminDashboard() {
                                 <option value="admin">مسؤول</option>
                               </select>
                             </div>
-                            <div className="space-y-2">
-                              <Label className="text-slate-300">المظهر</Label>
-                              <select
-                                value={userForm.theme}
-                                onChange={(e) =>
-                                  setUserForm({
-                                    ...userForm,
-                                    theme: e.target.value as 'light' | 'dark',
-                                  })
-                                }
-                                className="w-full bg-slate-800 border-slate-700 text-white rounded-md p-2"
-                              >
-                                <option value="light">فاتح</option>
-                                <option value="dark">داكن</option>
-                              </select>
-                            </div>
                           </div>
                           <DialogFooter>
                             <Button
@@ -5163,12 +3747,6 @@ export default function AdminDashboard() {
                                   الدور
                                 </th>
                                 <th className="px-6 py-4 text-right text-sm font-medium text-slate-300">
-                                  المظهر
-                                </th>
-                                <th className="px-6 py-4 text-right text-sm font-medium text-slate-300">
-                                  كلمة المرور
-                                </th>
-                                <th className="px-6 py-4 text-right text-sm font-medium text-slate-300">
                                   الإجراءات
                                 </th>
                               </tr>
@@ -5192,20 +3770,6 @@ export default function AdminDashboard() {
                                     >
                                       {user.role === 'admin' ? 'مسؤول' : 'مستخدم'}
                                     </span>
-                                  </td>
-                                  <td className="px-6 py-4 text-sm text-slate-300">
-                                    <span
-                                      className={`px-3 py-1 rounded-full text-xs font-medium ${
-                                        user.theme === 'dark'
-                                          ? 'bg-indigo-500/20 text-indigo-300'
-                                          : 'bg-emerald-500/20 text-emerald-300'
-                                      }`}
-                                    >
-                                      {user.theme === 'dark' ? 'داكن' : 'فاتح'}
-                                    </span>
-                                  </td>
-                                  <td className="px-6 py-4 text-sm text-slate-300">
-                                    {user.password ? 'محفوظ (مشفّر)' : 'غير متوفر'}
                                   </td>
                                   <td className="px-6 py-4">
                                     <div className="flex items-center gap-2">
