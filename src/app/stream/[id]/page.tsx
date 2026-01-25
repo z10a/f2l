@@ -10,6 +10,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import Hls from 'hls.js';
 import { toast } from 'sonner';
 
+const RECOMMENDATIONS_KEY = 'streamRecommendations';
+
 interface Server {
   id: string;
   name: string;
@@ -43,6 +45,7 @@ export default function StreamPage({ params }: { params: { id: string } }) {
   const [selectedServer, setSelectedServer] = useState<Server | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [recommendedStreams, setRecommendedStreams] = useState<StreamData[]>([]);
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
 
@@ -55,6 +58,11 @@ export default function StreamPage({ params }: { params: { id: string } }) {
       setSelectedServer(stream.servers[0]);
     }
   }, [stream, selectedServer]);
+
+  useEffect(() => {
+    if (!stream) return;
+    void loadRecommendedStreams(stream.id);
+  }, [stream]);
 
   useEffect(() => {
     if (selectedServer && videoRef.current) {
@@ -82,6 +90,31 @@ export default function StreamPage({ params }: { params: { id: string } }) {
       toast.error('فشل في تحميل البث المباشر');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadRecommendedStreams = async (streamId: string) => {
+    try {
+      const response = await fetch('/api/streams');
+      if (!response.ok) return;
+      const allStreams = (await response.json()) as StreamData[];
+      const candidates = allStreams.filter((item) => item.id !== streamId);
+      const stored = localStorage.getItem(RECOMMENDATIONS_KEY);
+      let selectedIds: string[] = [];
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored) as Record<string, string[]>;
+          selectedIds = parsed[streamId] ?? [];
+        } catch (error) {
+          console.error('Failed to parse recommendations:', error);
+        }
+      }
+      const recommended = selectedIds.length
+        ? candidates.filter((item) => selectedIds.includes(item.id))
+        : candidates.slice(0, 2);
+      setRecommendedStreams(recommended.slice(0, 2));
+    } catch (error) {
+      console.error('Error loading recommendations:', error);
     }
   };
 
@@ -350,6 +383,54 @@ export default function StreamPage({ params }: { params: { id: string } }) {
                     <p className="text-sm text-slate-500 dark:text-slate-400">
                       <span className="font-semibold">القناة:</span> {stream.title}
                     </p>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {recommendedStreams.length > 0 && (
+              <Card className="mt-6">
+                <CardHeader>
+                  <CardTitle className="text-lg text-slate-800 dark:text-slate-100">
+                    قنوات موصى بها
+                  </CardTitle>
+                  <CardDescription className="text-slate-500 dark:text-slate-400">
+                    قناتان مقترحتان لمشاهدتها بعد هذا البث.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {recommendedStreams.map((recommended) => {
+                      const icon =
+                        recommended.thumbnail || recommended.servers[0]?.channelLogo || '';
+                      return (
+                        <Link
+                          key={recommended.id}
+                          href={`/stream/${recommended.id}`}
+                          className="flex items-center gap-3 rounded-lg border border-slate-200 p-3 transition hover:border-red-300 hover:shadow-sm dark:border-slate-800"
+                        >
+                          <div className="flex h-10 w-10 items-center justify-center rounded-md bg-slate-100 dark:bg-slate-800">
+                            {icon ? (
+                              <img
+                                src={icon}
+                                alt={recommended.title}
+                                className="h-8 w-8 object-contain"
+                              />
+                            ) : (
+                              <Tv className="h-5 w-5 text-slate-400" />
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate">
+                              {recommended.title}
+                            </p>
+                            <p className="text-xs text-slate-500 line-clamp-1">
+                              {recommended.description || 'بدون وصف'}
+                            </p>
+                          </div>
+                        </Link>
+                      );
+                    })}
                   </div>
                 </CardContent>
               </Card>

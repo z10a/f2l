@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { AtSign, Eye, EyeOff, KeyRound, User } from 'lucide-react';
+import { AtSign, Eye, EyeOff, KeyRound, User, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -61,9 +61,31 @@ export default function LoginPage() {
 
   const labels = useMemo(() => COPY[language], [language]);
   const dir = language === 'ar' ? 'rtl' : 'ltr';
+  const isRtl = dir === 'rtl';
+
+  const handleSocialSignIn = (provider: 'google' | 'apple' | 'facebook') => {
+    const displayName =
+      provider === 'google'
+        ? 'Google User'
+        : provider === 'apple'
+        ? 'Apple User'
+        : 'Facebook User';
+    localStorage.setItem(
+      'userProfile',
+      JSON.stringify({
+        displayName: language === 'ar' ? `مستخدم ${displayName}` : displayName,
+        email: `${provider}@example.com`,
+        provider,
+      })
+    );
+    router.push('/profile');
+  };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white dark:from-slate-950 dark:to-slate-900" dir={dir}>
+    <div
+      className="min-h-screen bg-[radial-gradient(circle_at_top,_#fee2e2,_transparent_45%),linear-gradient(to_bottom,_#f8fafc,_#ffffff)] dark:bg-[radial-gradient(circle_at_top,_#3f1d1d,_transparent_45%),linear-gradient(to_bottom,_#020617,_#0f172a)]"
+      dir={dir}
+    >
       <div className="container mx-auto flex min-h-screen flex-col items-center justify-center px-4 py-12">
         <div className="flex w-full max-w-md items-center justify-between text-sm text-slate-500 dark:text-slate-400">
           <Link href="/" className="hover:text-red-500">
@@ -78,21 +100,44 @@ export default function LoginPage() {
           </button>
         </div>
 
-        <Card className="mt-6 w-full max-w-md border-slate-200 shadow-lg dark:border-slate-800">
+        <Card className="mt-6 w-full max-w-md border-slate-200 bg-white/90 shadow-2xl backdrop-blur dark:border-slate-800 dark:bg-slate-900/80">
           <CardHeader>
-            <CardTitle className="text-2xl text-slate-900 dark:text-white">{labels.title}</CardTitle>
-            <CardDescription>{labels.subtitle}</CardDescription>
+            <div className="flex items-center gap-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-red-500 to-red-700 text-white shadow-lg">
+                <User className="h-5 w-5" />
+              </div>
+              <div>
+                <CardTitle className="text-2xl text-slate-900 dark:text-white">
+                  {labels.title}
+                </CardTitle>
+                <CardDescription>{labels.subtitle}</CardDescription>
+              </div>
+            </div>
           </CardHeader>
           <CardContent className="space-y-5">
+            <div className="rounded-xl border border-red-100 bg-red-50/60 p-3 text-xs text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-100">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="h-4 w-4" />
+                <span>
+                  {language === 'ar'
+                    ? 'جلسة آمنة مع حفظ تفضيلاتك عبر الأجهزة.'
+                    : 'Secure session with preferences synced across devices.'}
+                </span>
+              </div>
+            </div>
             <div className="space-y-2">
               <Label htmlFor="email">{labels.email}</Label>
               <div className="relative">
-                <AtSign className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <AtSign
+                  className={`absolute top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 ${
+                    isRtl ? 'right-3' : 'left-3'
+                  }`}
+                />
                 <Input
                   id="email"
                   type="email"
                   placeholder="name@email.com"
-                  className="pl-9"
+                  className={`${isRtl ? 'pr-9' : 'pl-9'} py-[6px]`}
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
                 />
@@ -102,19 +147,25 @@ export default function LoginPage() {
             <div className="space-y-2">
               <Label htmlFor="password">{labels.password}</Label>
               <div className="relative">
-                <KeyRound className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <KeyRound
+                  className={`absolute top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 ${
+                    isRtl ? 'right-3' : 'left-3'
+                  }`}
+                />
                 <Input
                   id="password"
                   type={showPassword ? 'text' : 'password'}
                   placeholder="••••••••"
-                  className="pl-9 pr-16"
+                  className={`${isRtl ? 'pr-9 pl-16' : 'pl-9 pr-16'} py-[6px]`}
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((prev) => !prev)}
-                  className="absolute right-3 top-1/2 flex -translate-y-1/2 items-center gap-1 text-xs font-semibold text-slate-500 hover:text-red-500"
+                  className={`absolute top-1/2 flex -translate-y-1/2 items-center gap-1 text-xs font-semibold text-slate-500 hover:text-red-500 ${
+                    isRtl ? 'left-3' : 'right-3'
+                  }`}
                 >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   {showPassword ? labels.hide : labels.show}
@@ -126,7 +177,7 @@ export default function LoginPage() {
             </div>
 
             <Button
-              className="w-full"
+              className="w-full bg-gradient-to-r from-red-600 to-red-700 text-white shadow-lg shadow-red-500/30 hover:from-red-700 hover:to-red-800"
               size="lg"
               onClick={() => {
                 if (!email.trim()) return;
@@ -151,13 +202,30 @@ export default function LoginPage() {
             </div>
 
             <div className="grid gap-2 sm:grid-cols-3">
-              <Button variant="outline" className="w-full">
+              <Button
+                variant="outline"
+                className="w-full gap-2"
+                onClick={() => handleSocialSignIn('google')}
+              >
+                <span className="rounded-full bg-red-500/10 px-2 py-1 text-xs text-red-600">G</span>
                 {labels.google}
               </Button>
-              <Button variant="outline" className="w-full">
+              <Button
+                variant="outline"
+                className="w-full gap-2"
+                onClick={() => handleSocialSignIn('apple')}
+              >
+                <span className="rounded-full bg-slate-900/10 px-2 py-1 text-xs text-slate-700 dark:text-slate-200">
+                  
+                </span>
                 {labels.apple}
               </Button>
-              <Button variant="outline" className="w-full">
+              <Button
+                variant="outline"
+                className="w-full gap-2"
+                onClick={() => handleSocialSignIn('facebook')}
+              >
+                <span className="rounded-full bg-blue-500/10 px-2 py-1 text-xs text-blue-600">f</span>
                 {labels.facebook}
               </Button>
             </div>
