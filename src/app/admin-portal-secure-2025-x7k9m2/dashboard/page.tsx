@@ -13,26 +13,7 @@ import {
   Edit,
   MoreVertical,
   Menu,
-  X,
-  Upload,
-  CheckCircle2,
-  XCircle,
-  RefreshCw,
-  Pin,
-  Timer,
-  BarChart3,
-  Rows,
-  CopyCheck,
-  ImagePlus,
-  Gauge,
-  FolderTree,
-  Database,
-  MonitorPlay,
-  Bot,
-  Cloud,
-  ServerCog,
-  SlidersHorizontal,
-  Settings,
+  X
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -56,14 +37,12 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
-import { getStreamQuality, formatQualityInfo } from '@/lib/utils/quality-detection';
 
 interface Stream {
   id: string;
   title: string;
   description: string | null;
   thumbnail: string | null;
-  categoryId?: string | null;
   published: boolean;
   servers: Server[];
   playlistUrl?: string;
@@ -88,7 +67,6 @@ interface User {
   email: string;
   role: string;
   password?: string;
-  theme?: 'light' | 'dark';
   createdAt?: string;
   updatedAt?: string;
 }
@@ -172,7 +150,6 @@ export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<Tab>('streams');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [streams, setStreams] = useState<Stream[]>([]);
-  const [pinnedStreams, setPinnedStreams] = useState<Set<string>>(new Set());
   const [users, setUsers] = useState<User[]>([]);
   const [ads, setAds] = useState<Ad[]>([]);
   const [loading, setLoading] = useState(true);
@@ -361,7 +338,6 @@ export default function AdminDashboard() {
     name: '',
     password: '',
     role: 'user',
-    theme: 'light',
   });
 
   // Ad form state
@@ -570,19 +546,7 @@ export default function AdminDashboard() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      if (
-        activeTab === 'streams' ||
-        activeTab === 'duplicates' ||
-        activeTab === 'thumbnails' ||
-        activeTab === 'quality' ||
-        activeTab === 'categories' ||
-        activeTab === 'backup' ||
-        activeTab === 'preview' ||
-        activeTab === 'infrastructure' ||
-        activeTab === 'abTesting' ||
-        activeTab === 'featureFlags' ||
-        activeTab === 'siteSettings'
-      ) {
+      if (activeTab === 'streams') {
         const response = await fetch('/api/streams');
         const data = await response.json();
         setStreams(data);
@@ -594,18 +558,6 @@ export default function AdminDashboard() {
         const response = await fetch('/api/ads');
         const data = await response.json();
         setAds(data);
-      } else if (activeTab === 'autoRefresh') {
-        setLoading(false);
-        return;
-      } else if (activeTab === 'analytics') {
-        setLoading(false);
-        return;
-      } else if (activeTab === 'batch') {
-        setLoading(false);
-        return;
-      } else if (activeTab === 'categories' || activeTab === 'backup' || activeTab === 'preview') {
-        setLoading(false);
-        return;
       }
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -658,329 +610,101 @@ export default function AdminDashboard() {
     return 'يومياً';
   };
 
-  const analyticsCards = [
-    { label: 'إجمالي المشاهدات', value: '128,420', delta: '+12%' },
-    { label: 'المستخدمون النشطون', value: '8,914', delta: '+5%' },
-    { label: 'وقت الذروة', value: '9:00 مساءً', delta: 'ثابت' },
-    { label: 'متوسط مدة المشاهدة', value: '18 دقيقة', delta: '+3%' },
-  ];
-
-  const topChannels = [
-    { name: 'قناة الأخبار', views: 18420, change: '+9%' },
-    { name: 'قناة الرياضة', views: 17210, change: '+6%' },
-    { name: 'قناة الأفلام', views: 15890, change: '+11%' },
-    { name: 'قناة الأطفال', views: 12740, change: '+4%' },
-    { name: 'قناة الموسيقى', views: 11890, change: '+2%' },
-  ];
-
-  const activityLogs = [
-    { id: 'log-1', action: 'تسجيل دخول', user: 'dilerbarakad@gmail.com', time: 'منذ 5 دقائق' },
-    { id: 'log-2', action: 'تحديث قائمة', user: 'dilerbarakad@gmail.com', time: 'منذ 20 دقيقة' },
-    { id: 'log-3', action: 'تعديل قناة', user: 'editor@f2l.com', time: 'منذ 45 دقيقة' },
-    { id: 'log-4', action: 'إضافة إعلان', user: 'dilerbarakad@gmail.com', time: 'قبل ساعة' },
-    { id: 'log-5', action: 'تسجيل خروج', user: 'dilerbarakad@gmail.com', time: 'قبل ساعتين' },
-  ];
-
-  const uptimeStats = [
-    { server: 'Server 1', uptime: '99.9%', incidents: '0' },
-    { server: 'Server 2', uptime: '98.7%', incidents: '2' },
-    { server: 'Server 3', uptime: '97.4%', incidents: '3' },
-    { server: 'Server 4', uptime: '96.8%', incidents: '5' },
-  ];
-
-  const peakUsage = [
-    { label: 'صباحاً', value: '18%' },
-    { label: 'ظهراً', value: '24%' },
-    { label: 'مساءً', value: '41%' },
-    { label: 'ليلاً', value: '17%' },
-  ];
-
-  const normalizeTitle = (title: string) =>
-    title.trim().toLowerCase().replace(/\s+/g, ' ');
-
-  const duplicateStreams = streams.reduce<Record<string, Stream[]>>((acc, stream) => {
-    const key = normalizeTitle(stream.title);
-    acc[key] = acc[key] ? [...acc[key], stream] : [stream];
-    return acc;
-  }, {});
-
-  const duplicateStreamGroups = Object.values(duplicateStreams).filter((group) => group.length > 1);
-
-  const serverUrlMap = streams.reduce<Record<string, { stream: Stream; server: Server }[]>>(
-    (acc, stream) => {
-      stream.servers.forEach((server) => {
-        const key = server.url.trim();
-        acc[key] = acc[key] ? [...acc[key], { stream, server }] : [{ stream, server }];
-      });
-      return acc;
-    },
-    {}
-  );
-
-  const duplicateServerGroups = Object.entries(serverUrlMap)
-    .filter(([, group]) => group.length > 1)
-    .map(([url, group]) => ({ url, group }));
-
-  const parseCsvLines = (content: string) => {
-    return content
-      .split('\n')
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .map((line) => line.split(',').map((value) => value.trim()));
-  };
-
-  const handleImportBatchFile = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      const text = reader.result?.toString() ?? '';
-      setBatchUrlText(text);
-    };
-    reader.readAsText(file);
-  };
-
-  const handleBatchUrlUpdate = async () => {
-    if (!batchUrlText.trim()) {
-      toast.error('يرجى إضافة بيانات التحديث');
-      return;
-    }
-
-    setBatchProcessing(true);
-    const rows = parseCsvLines(batchUrlText);
-    const updateRequests = rows.map(([serverId, url]) => ({
-      serverId,
-      url,
-    }));
-
-    const results = await Promise.all(
-      updateRequests.map(async ({ serverId, url }) => {
-        if (!serverId || !url) {
-          return { serverId, success: false, error: 'بيانات غير مكتملة' };
-        }
-        try {
-          const response = await fetch('/api/servers', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: serverId, url }),
-          });
-          if (!response.ok) {
-            const data = await response.json();
-            throw new Error(data.error || 'فشل التحديث');
-          }
-          return { serverId, success: true };
-        } catch (error) {
-          return {
-            serverId,
-            success: false,
-            error: error instanceof Error ? error.message : 'فشل التحديث',
-          };
-        }
-      })
-    );
-
-    const successCount = results.filter((result) => result.success).length;
-    const failureCount = results.length - successCount;
-
-    if (successCount > 0) {
-      toast.success(`تم تحديث ${successCount} رابط`);
-    }
-    if (failureCount > 0) {
-      toast.error(`فشل تحديث ${failureCount} رابط`);
-    }
-
-    setBatchProcessing(false);
-    fetchData();
-  };
-
-  const handleBatchDeleteStreams = async () => {
-    const ids = batchDeleteIds
-      .split(',')
-      .map((id) => id.trim())
-      .filter(Boolean);
-
-    if (ids.length === 0) {
-      toast.error('يرجى إدخال معرفات القنوات');
-      return;
-    }
-
-    setBatchProcessing(true);
-    const results = await Promise.all(
-      ids.map(async (id) => {
-        try {
-          const response = await fetch(`/api/streams/${id}`, { method: 'DELETE' });
-          if (!response.ok) {
-            const data = await response.json();
-            throw new Error(data.error || 'فشل الحذف');
-          }
-          return { id, success: true };
-        } catch (error) {
-          return {
-            id,
-            success: false,
-            error: error instanceof Error ? error.message : 'فشل الحذف',
-          };
-        }
-      })
-    );
-
-    const successCount = results.filter((result) => result.success).length;
-    const failureCount = results.length - successCount;
-
-    if (successCount > 0) {
-      toast.success(`تم حذف ${successCount} قناة`);
-    }
-    if (failureCount > 0) {
-      toast.error(`فشل حذف ${failureCount} قناة`);
-    }
-
-    setBatchProcessing(false);
-    fetchData();
-  };
-
-  const handleBatchMetadataUpdate = async () => {
-    const ids = batchMetaIds
-      .split(',')
-      .map((id) => id.trim())
-      .filter(Boolean);
-
-    if (ids.length === 0) {
-      toast.error('يرجى إدخال معرفات القنوات');
-      return;
-    }
-
-    if (!batchCategory && !batchDescription) {
-      toast.error('يرجى إدخال بيانات التعديل');
-      return;
-    }
-
-    setBatchProcessing(true);
-    const results = await Promise.all(
-      ids.map(async (id) => {
-        try {
-          const current = await fetch(`/api/streams/${id}`);
-          if (!current.ok) {
-            const data = await current.json();
-            throw new Error(data.error || 'لم يتم العثور على القناة');
-          }
-          const stream = await current.json();
-          const response = await fetch(`/api/streams/${id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              title: stream.title,
-              description: batchDescription || stream.description,
-              thumbnail: stream.thumbnail,
-              categoryId: batchCategory || stream.categoryId,
-              published: stream.published,
-              playlistUrl: stream.playlistUrl,
-            }),
-          });
-          if (!response.ok) {
-            const data = await response.json();
-            throw new Error(data.error || 'فشل التحديث');
-          }
-          return { id, success: true };
-        } catch (error) {
-          return {
-            id,
-            success: false,
-            error: error instanceof Error ? error.message : 'فشل التحديث',
-          };
-        }
-      })
-    );
-
-    const successCount = results.filter((result) => result.success).length;
-    const failureCount = results.length - successCount;
-
-    if (successCount > 0) {
-      toast.success(`تم تحديث بيانات ${successCount} قناة`);
-    }
-    if (failureCount > 0) {
-      toast.error(`فشل تحديث ${failureCount} قناة`);
-    }
-
-    setBatchProcessing(false);
-    fetchData();
-  };
-
-  const handleMergeDuplicates = async (primaryId: string, duplicateIds: string[]) => {
-    if (!primaryId || duplicateIds.length === 0) {
-      toast.error('يرجى اختيار قناة رئيسية وقنوات مكررة');
-      return;
-    }
-
-    setDuplicateProcessing(true);
+  // Stream operations
+  const handleCreateStream = async () => {
     try {
-      const response = await fetch('/api/admin/duplicates/merge', {
+      const adminUser = JSON.parse(localStorage.getItem('adminUser') || '{}');
+      const response = await fetch('/api/streams', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          primaryStreamId: primaryId,
-          duplicateStreamIds: duplicateIds,
+          ...streamForm,
+          authorId: adminUser.id,
+          playlistUrl: streamForm.playlistUrl,
         }),
       });
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || 'فشل دمج القنوات');
-      }
-      toast.success(`تم دمج ${data.mergedStreams} قناة`);
-      await fetchData();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'فشل دمج القنوات');
-    } finally {
-      setDuplicateProcessing(false);
-      setMergePrimaryId('');
-    }
-  };
+      if (!response.ok) throw new Error('Failed to create stream');
 
-  const handleMergeAllDuplicates = async () => {
-    if (duplicateStreamGroups.length === 0) {
-      toast.error('لا توجد قنوات مكررة للدمج');
-      return;
-    }
-    setDuplicateProcessing(true);
-    let mergedCount = 0;
-    try {
-      for (const group of duplicateStreamGroups) {
-        if (group.length < 2) continue;
-        const [primary, ...duplicates] = group;
-        const response = await fetch('/api/admin/duplicates/merge', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            primaryStreamId: primary.id,
-            duplicateStreamIds: duplicates.map((stream) => stream.id),
-          }),
-        });
-        const data = await response.json();
-        if (!response.ok) {
-          throw new Error(data.error || 'فشل دمج القنوات');
+      const stream = await response.json();
+
+      // Create servers if URLs are provided
+      const serverPromises = [];
+      streamForm.serverUrls.forEach((url, index) => {
+        if (url && url.trim()) {
+          serverPromises.push(
+            fetch('/api/servers', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                streamId: stream.id,
+                name: `الخادم ${index + 1}`,
+                url: url.trim(),
+                priority: index,
+              }),
+            })
+          );
         }
-        mergedCount += data.mergedStreams ?? duplicates.length;
-      }
-      toast.success(`تم دمج ${mergedCount} قناة مكررة`);
-      await fetchData();
+      });
+
+      await Promise.all(serverPromises);
+
+      toast.success('تم إنشاء البث بنجاح');
+      setStreamFormOpen(false);
+      resetStreamForm();
+      fetchData();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'فشل دمج القنوات');
-    } finally {
-      setDuplicateProcessing(false);
-      setMergePrimaryId('');
+      toast.error('فشل في إنشاء البث');
     }
   };
 
-  const handleFaviconUpload = (file: File | null) => {
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      setSiteSettings((prev) => ({
-        ...prev,
-        faviconUrl: typeof reader.result === 'string' ? reader.result : prev.faviconUrl,
-      }));
-    };
-    reader.readAsDataURL(file);
+  const handleUpdateStream = async () => {
+    if (!editingStream) return;
+    try {
+      const response = await fetch(`/api/streams/${editingStream.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(streamForm),
+      });
+      if (!response.ok) throw new Error('Failed to update stream');
+      toast.success('تم تحديث البث بنجاح');
+      setStreamFormOpen(false);
+      setEditingStream(null);
+      resetStreamForm();
+      fetchData();
+    } catch (error) {
+      toast.error('فشل في تحديث البث');
+    }
+  };
+
+  const handleDeleteStream = async (id: string) => {
+    try {
+      await fetch(`/api/streams/${id}`, { method: 'DELETE' });
+      toast.success('تم حذف البث بنجاح');
+      fetchData();
+    } catch (error) {
+      toast.error('فشل في حذف البث');
+    }
+  };
+
+  const openStreamForm = (stream?: Stream) => {
+    if (stream) {
+      setEditingStream(stream);
+      // Extract server URLs from the stream's servers
+      const serverUrls = stream.servers.map(server => server.url);
+      setStreamForm({
+        title: stream.title,
+        description: stream.description || '',
+        thumbnail: stream.thumbnail || '',
+        categoryId: '',
+        published: stream.published,
+        playlistUrl: stream.playlistUrl || '',
+        serverUrls: serverUrls.length > 0 ? serverUrls : ['', '', '', ''],
+      });
+    } else {
+      setEditingStream(null);
+      resetStreamForm();
+    }
+    setStreamFormOpen(true);
   };
 
   const handleThumbnailUpload = (file: File | null) => {
@@ -1022,118 +746,79 @@ export default function AdminDashboard() {
     reader.readAsDataURL(file);
   };
 
-  const applyFeaturedStreams = () => {
-    const ids = featuredInput
-      .split(/[\n,]/)
-      .map((id) => id.trim())
-      .filter(Boolean);
-    setSiteSettings((prev) => ({
-      ...prev,
-      featuredStreamIds: ids,
-    }));
-    setPinnedStreams(new Set(ids));
-    toast.success('تم تحديث القنوات المميزة');
-  };
-
-  const handleRegenerateThumbnails = async (force = false) => {
-    setThumbnailProcessing(true);
-    setThumbnailSummary(null);
-    try {
-      const response = await fetch('/api/admin/thumbnails/regenerate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ force }),
-      });
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || 'فشل توليد الصور المصغرة');
-      }
-      setThumbnailSummary({
-        updated: data.updated ?? 0,
-        skipped: data.skipped ?? 0,
-        failed: data.failed ?? 0,
-      });
-      toast.success('تم تحديث الصور المصغرة');
-      await fetchData();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'فشل توليد الصور المصغرة');
-    } finally {
-      setThumbnailProcessing(false);
-    }
-  };
-
-  const handleQualityTest = async () => {
-    if (!qualityUrl.trim()) {
-      toast.error('يرجى إدخال رابط البث');
-      return;
-    }
-    setQualityProcessing(true);
-    setQualityReport(null);
-    try {
-      const response = await fetch('/api/admin/quality-test', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: qualityUrl.trim() }),
-      });
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || 'فشل اختبار الجودة');
-      }
-      setQualityReport({ status: 'success', ...data });
-      toast.success('تم تحليل الجودة');
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'فشل اختبار الجودة';
-      setQualityReport({ status: 'failed', message });
-      toast.error(message);
-    } finally {
-      setQualityProcessing(false);
-    }
-  };
-
-  const handleCreateCategory = () => {
-    if (!categoryName.trim()) {
-      toast.error('يرجى إدخال اسم التصنيف');
+  // Parse M3U playlist
+  const handleParsePlaylist = async () => {
+    if (!streamForm.playlistUrl) {
+      toast.error('الرجا إدخال رابط ملف M3U');
       return;
     }
 
-    const newCategory: Category = {
-      id: crypto.randomUUID(),
-      name: categoryName.trim(),
-      parentId: categoryParentId || undefined,
-    };
-
-    setCategories((prev) => [...prev, newCategory]);
-    setCategoryName('');
-    setCategoryParentId('');
-  };
-
-  const handleDeleteCategory = (categoryId: string) => {
-    setCategories((prev) => prev.filter((category) => category.id !== categoryId));
-  };
-
-  const updateStreamCategory = async (streamId: string, categoryId?: string) => {
+    setLoadingChannels(true);
     try {
-      const current = await fetch(`/api/streams/${streamId}`);
-      if (!current.ok) {
-        const data = await current.json();
-        throw new Error(data.error || 'لم يتم العثور على القناة');
-      }
-      const stream = await current.json();
-      const response = await fetch(`/api/streams/${streamId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: stream.title,
-          description: stream.description,
-          thumbnail: stream.thumbnail,
-          categoryId: categoryId || null,
-          published: stream.published,
-          playlistUrl: stream.playlistUrl,
-        }),
-      });
+      const response = await fetch(streamForm.playlistUrl);
       if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'فشل تحديث التصنيف');
+        throw new Error('فشل في تحميل ملف القائمة');
+      }
+
+      const content = await response.text();
+      const channels: PlaylistChannel[] = [];
+      const lines = content.split('\n');
+      let currentChannel: Partial<PlaylistChannel> = {};
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+
+        // Parse EXTINF metadata
+        if (line.startsWith('#EXTINF:')) {
+          if (currentChannel.url) {
+            channels.push({ ...currentChannel } as PlaylistChannel);
+          }
+          currentChannel = { url: '' };
+
+          const extinfLine = line.substring(8); // Remove #EXTINF:
+          // Split by comma - everything after the last comma is the channel name
+          const lastCommaIndex = extinfLine.lastIndexOf(',');
+          if (lastCommaIndex !== -1) {
+            const metadataPart = extinfLine.substring(0, lastCommaIndex);
+            const channelName = extinfLine.substring(lastCommaIndex + 1).trim();
+
+            // Set channel name (remove quotes if present)
+            currentChannel.channelName = channelName.replace(/^"|"$/g, '');
+
+            // Parse metadata attributes
+            const attributes = metadataPart.split(/\s+/);
+            for (const attr of attributes) {
+              if (attr.includes('=')) {
+                const [key, value] = attr.split('=');
+                const cleanKey = key.trim().toLowerCase();
+                const cleanValue = value.replace(/^"|"$/g, '').trim();
+
+                if (cleanKey === 'tvg-id') {
+                  currentChannel.channelId = cleanValue;
+                } else if (cleanKey === 'tvg-logo') {
+                  currentChannel.logo = cleanValue;
+                } else if (cleanKey === 'tvg-name') {
+                  if (!currentChannel.channelName) {
+                    currentChannel.channelName = cleanValue;
+                  }
+                } else if (cleanKey === 'group-title') {
+                  currentChannel.groupTitle = cleanValue;
+                }
+              }
+            }
+          }
+        }
+
+        // Parse stream URL
+        if (!line.startsWith('#') && line.trim()) {
+          currentChannel.url = line.trim();
+        }
+      }
+
+      // Add last channel
+      if (currentChannel.url) {
+        channels.push({ ...currentChannel } as PlaylistChannel);
       }
       toast.success('تم تحديث التصنيف');
     } catch (error) {
@@ -1141,50 +826,13 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleBulkAssignCategory = async (categoryId: string) => {
-    if (selectedStreamIds.size === 0) {
-      toast.error('يرجى اختيار قنوات');
-      return;
-    }
-    setBatchProcessing(true);
-    const results = await Promise.all(
-      Array.from(selectedStreamIds).map(async (id) => {
-        try {
-          const current = await fetch(`/api/streams/${id}`);
-          if (!current.ok) {
-            const data = await current.json();
-            throw new Error(data.error || 'لم يتم العثور على القناة');
-          }
-          const stream = await current.json();
-          const response = await fetch(`/api/streams/${id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              title: stream.title,
-              description: stream.description,
-              thumbnail: stream.thumbnail,
-              categoryId: categoryId || null,
-              published: stream.published,
-              playlistUrl: stream.playlistUrl,
-            }),
-          });
-          if (!response.ok) {
-            const data = await response.json();
-            throw new Error(data.error || 'فشل تحديث التصنيف');
-          }
-          return { id, success: true };
-        } catch (error) {
-          return { id, success: false };
-        }
-      })
-    );
-    const successCount = results.filter((result) => result.success).length;
-    const failureCount = results.length - successCount;
-    if (successCount > 0) {
-      toast.success(`تم تحديث ${successCount} قناة`);
-    }
-    if (failureCount > 0) {
-      toast.error(`فشل تحديث ${failureCount} قناة`);
+      setParsedChannels(channels);
+      toast.success(`تم تحليل ${channels.length} قناة من القائمة`);
+      setLoadingChannels(false);
+    } catch (error) {
+      console.error('Error parsing playlist:', error);
+      toast.error('فشل في تحليل ملف القائمة');
+      setLoadingChannels(false);
     }
     setSelectedStreamIds(new Set());
     setBatchProcessing(false);
@@ -1203,64 +851,20 @@ export default function AdminDashboard() {
     });
   };
 
-  const handleCategoryDrop = async (event: React.DragEvent<HTMLDivElement>, categoryId?: string) => {
-    event.preventDefault();
-    const streamId = event.dataTransfer.getData('text/plain');
-    if (!streamId) return;
-    await updateStreamCategory(streamId, categoryId);
-    await fetchData();
+  const updateServerUrl = (index: number, value: string) => {
+    const newServerUrls = [...streamForm.serverUrls];
+    newServerUrls[index] = value;
+    setStreamForm({
+      ...streamForm,
+      serverUrls: newServerUrls,
+    });
   };
 
-  const handleExportBackup = async (format: 'json' | 'sql') => {
-    setBackupProcessing(true);
-    try {
-      const response = await fetch(`/api/admin/backup/export?format=${format}`);
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'فشل تصدير النسخة الاحتياطية');
-      }
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `backup.${format === 'sql' ? 'sql' : 'json'}`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
-      setLastBackupAt(new Date().toISOString());
-      toast.success('تم تنزيل النسخة الاحتياطية');
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'فشل تصدير النسخة الاحتياطية');
-    } finally {
-      setBackupProcessing(false);
+  const addSelectedChannels = async () => {
+    if (selectedChannels.length === 0) {
+      toast.error('الرجا تحديد قناة واحدة على الأقل');
+      return;
     }
-  };
-
-  const handleExportChannels = async () => {
-    setBackupProcessing(true);
-    try {
-      const response = await fetch('/api/admin/streams/export');
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'فشل تصدير القنوات');
-      }
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = 'channels.csv';
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
-      toast.success('تم تنزيل قائمة القنوات');
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'فشل تصدير القنوات');
-    } finally {
-      setBackupProcessing(false);
-    }
-  };
 
   const handleExportAnalytics = async () => {
     setBackupProcessing(true);
@@ -1411,279 +1015,73 @@ export default function AdminDashboard() {
       const response = await fetch('/api/admin/auto-scaling/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(autoScalingConfig),
+        body: JSON.stringify(adForm),
       });
-      if (!response.ok) {
-        throw new Error('Failed to save autoscaling config');
-      }
-      const data = (await response.json()) as { message: string };
-      setAutoScalingStatus(data.message);
-      toast.success('تم حفظ إعدادات التوسع التلقائي');
+      if (!response.ok) throw new Error('Failed to create ad');
+      toast.success('تم إنشاء الإعلان بنجاح');
+      setAdFormOpen(false);
+      resetAdForm();
+      fetchData();
     } catch (error) {
-      console.error('Autoscaling error:', error);
-      toast.error('تعذر حفظ إعدادات التوسع التلقائي');
+      toast.error('فشل في إنشاء الإعلان');
     }
   };
 
-  const handleSaveOffsiteBackup = async () => {
+  const handleUpdateAd = async () => {
+    if (!editingAd) return;
     try {
-      const response = await fetch('/api/admin/offsite-backup/config', {
-        method: 'POST',
+      const response = await fetch('/api/ads', {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(offsiteBackupConfig),
+        body: JSON.stringify({ id: editingAd.id, ...adForm }),
       });
-      if (!response.ok) {
-        throw new Error('Failed to save offsite backup config');
-      }
-      const data = (await response.json()) as { message: string };
-      setOffsiteBackupStatus(data.message);
-      toast.success('تم حفظ إعدادات النسخ الاحتياطي الخارجي');
+      if (!response.ok) throw new Error('Failed to update ad');
+      toast.success('تم تحديث الإعلان بنجاح');
+      setAdFormOpen(false);
+      setEditingAd(null);
+      resetAdForm();
+      fetchData();
     } catch (error) {
-      console.error('Offsite backup error:', error);
-      toast.error('تعذر حفظ إعدادات النسخ الاحتياطي الخارجي');
+      toast.error('فشل في تحديث الإعلان');
     }
   };
 
-  const handleRunOffsiteBackup = async () => {
+  const handleDeleteAd = async (id: string) => {
     try {
-      const response = await fetch('/api/admin/offsite-backup/run', { method: 'POST' });
-      if (!response.ok) {
-        throw new Error('Failed to run offsite backup');
-      }
-      const data = (await response.json()) as { ranAt: string; message: string };
-      setOffsiteBackupConfig((prev) => ({ ...prev, lastRunAt: data.ranAt }));
-      setOffsiteBackupStatus(data.message);
-      toast.success('تم تشغيل النسخ الاحتياطي الخارجي');
+      await fetch(`/api/ads?id=${id}`, { method: 'DELETE' });
+      toast.success('تم حذف الإعلان بنجاح');
+      fetchData();
     } catch (error) {
-      console.error('Offsite backup run error:', error);
-      toast.error('تعذر تشغيل النسخ الاحتياطي الخارجي');
+      toast.error('فشل في حذف الإعلان');
     }
   };
 
-  const handleRunAbTest = async () => {
-    setAbTestingRunning(true);
-    try {
-      const response = await fetch('/api/admin/ab-testing/summary', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          servers: streams.flatMap((stream) =>
-            stream.servers.map((server) => ({
-              id: server.id,
-              name: server.name,
-              priority: server.priority,
-              streamId: stream.id,
-              streamTitle: stream.title,
-            }))
-          ),
-          config: abTestingConfig,
-        }),
+  const openAdForm = (ad?: Ad) => {
+    if (ad) {
+      setEditingAd(ad);
+      setAdForm({
+        streamId: '',
+        position: ad.position,
+        title: ad.title || '',
+        imageUrl: ad.imageUrl,
+        linkUrl: ad.linkUrl || '',
+        active: ad.active,
       });
-      if (!response.ok) {
-        throw new Error('Failed to run A/B test');
-      }
-      const data = (await response.json()) as {
-        totalRequests: number;
-        topServer?: { id: string; name: string; usage: number };
-        laggingServers: { id: string; name: string; usage: number }[];
-        failoverSuggested: boolean;
-        notes: string[];
-      };
-      setAbTestingReport(data);
-      toast.success('تم تحديث تقرير A/B');
-    } catch (error) {
-      console.error('A/B testing error:', error);
-      toast.error('تعذر تشغيل A/B حالياً');
-    } finally {
-      setAbTestingRunning(false);
-    }
-  };
-
-  const calculateNextRefresh = (interval: RefreshInterval) => {
-    const now = new Date();
-    if (interval === 'hourly') {
-      now.setHours(now.getHours() + 1);
-    } else if (interval === 'daily') {
-      now.setDate(now.getDate() + 1);
     } else {
-      now.setDate(now.getDate() + 7);
+      setEditingAd(null);
+      resetAdForm();
     }
-    return now.toISOString();
+    setAdFormOpen(true);
   };
 
-  const refreshPlaylist = async (config: PlaylistRefreshConfig) => {
-    if (refreshingIds.has(config.id)) return;
-    setRefreshingIds((prev) => new Set(prev).add(config.id));
-
-    try {
-      const response = await fetch('/api/playlists/parse', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ playlistUrl: config.url }),
-      });
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || 'فشل تحديث القائمة');
-      }
-
-      const channelUrls = (data.channels || [])
-        .map((channel: { url?: string }) => channel.url)
-        .filter(Boolean) as string[];
-      const previousChannels = new Set(config.channelUrls || []);
-      const currentChannels = new Set(channelUrls);
-      let addedChannels = 0;
-      let removedChannels = 0;
-
-      currentChannels.forEach((url) => {
-        if (!previousChannels.has(url)) addedChannels += 1;
-      });
-      previousChannels.forEach((url) => {
-        if (!currentChannels.has(url)) removedChannels += 1;
-      });
-
-      const historyEntry: RefreshHistoryEntry = {
-        id: crypto.randomUUID(),
-        timestamp: new Date().toISOString(),
-        status: 'success',
-        totalChannels: channelUrls.length,
-        addedChannels,
-        removedChannels,
-        message: 'تم تحديث القائمة بنجاح',
-      };
-
-      setRefreshConfigs((prev) =>
-        prev.map((item) =>
-          item.id === config.id
-            ? {
-                ...item,
-                channelUrls,
-                lastChannelCount: channelUrls.length,
-                lastRefreshedAt: new Date().toISOString(),
-                nextRefreshAt: calculateNextRefresh(item.interval),
-                lastStatus: 'success',
-                lastError: undefined,
-                history: [historyEntry, ...item.history].slice(0, 10),
-              }
-            : item
-        )
-      );
-      toast.success(`تم تحديث ${config.name}`);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'فشل تحديث القائمة';
-      const historyEntry: RefreshHistoryEntry = {
-        id: crypto.randomUUID(),
-        timestamp: new Date().toISOString(),
-        status: 'failed',
-        totalChannels: config.lastChannelCount || 0,
-        addedChannels: 0,
-        removedChannels: 0,
-        message,
-      };
-
-      setRefreshConfigs((prev) =>
-        prev.map((item) =>
-          item.id === config.id
-            ? {
-                ...item,
-                lastRefreshedAt: new Date().toISOString(),
-                nextRefreshAt: calculateNextRefresh(item.interval),
-                lastStatus: 'failed',
-                lastError: message,
-                history: [historyEntry, ...item.history].slice(0, 10),
-              }
-            : item
-        )
-      );
-
-      if (config.notifyEmail) {
-        try {
-          await fetch('/api/admin/playlist-refresh-notify', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              email: config.notifyEmail,
-              playlistName: config.name,
-              playlistUrl: config.url,
-              error: message,
-            }),
-          });
-          toast.error(`فشل تحديث ${config.name}، تم إرسال إشعار.`);
-        } catch (notifyError) {
-          console.error('Failed to notify about refresh failure:', notifyError);
-          toast.error(`فشل تحديث ${config.name}، تعذر إرسال الإشعار.`);
-        }
-      } else {
-        toast.error(`فشل تحديث ${config.name}`);
-      }
-    } finally {
-      setRefreshingIds((prev) => {
-        const next = new Set(prev);
-        next.delete(config.id);
-        return next;
-      });
-    }
-  };
-
-  const refreshDuePlaylists = () => {
-    const now = new Date();
-    refreshConfigs.forEach((config) => {
-      if (!config.nextRefreshAt) return;
-      if (refreshingIds.has(config.id)) return;
-      if (new Date(config.nextRefreshAt) <= now) {
-        void refreshPlaylist(config);
-      }
-    });
-  };
-
-  const handleSaveRefreshConfig = () => {
-    if (!refreshForm.name || !refreshForm.url) {
-      toast.error('يرجى إدخال الاسم والرابط');
-      return;
-    }
-
-    if (editingRefresh) {
-      setRefreshConfigs((prev) =>
-        prev.map((config) =>
-          config.id === editingRefresh.id
-            ? {
-                ...config,
-                name: refreshForm.name,
-                url: refreshForm.url,
-                interval: refreshForm.interval,
-                notifyEmail: refreshForm.notifyEmail,
-                nextRefreshAt: calculateNextRefresh(refreshForm.interval),
-              }
-            : config
-        )
-      );
-      toast.success('تم تحديث إعدادات التحديث');
-    } else {
-      setRefreshConfigs((prev) => [
-        {
-          id: crypto.randomUUID(),
-          name: refreshForm.name,
-          url: refreshForm.url,
-          interval: refreshForm.interval,
-          notifyEmail: refreshForm.notifyEmail,
-          nextRefreshAt: calculateNextRefresh(refreshForm.interval),
-          history: [],
-        },
-        ...prev,
-      ]);
-      toast.success('تم إضافة جدول تحديث جديد');
-    }
-
-    setEditingRefresh(null);
-    setRefreshForm({ name: '', url: '', interval: 'daily', notifyEmail: '' });
-  };
-
-  const handleEditRefreshConfig = (config: PlaylistRefreshConfig) => {
-    setEditingRefresh(config);
-    setRefreshForm({
-      name: config.name,
-      url: config.url,
-      interval: config.interval,
-      notifyEmail: config.notifyEmail,
+  const resetAdForm = () => {
+    setAdForm({
+      streamId: '',
+      position: 'home-top',
+      title: '',
+      imageUrl: '',
+      linkUrl: '',
+      active: true,
     });
   };
 
@@ -4299,272 +3697,50 @@ export default function AdminDashboard() {
                     )}
                   </div>
                 )}
+              </Button>
+            </div>
+          </div>
 
-                {activeTab === 'infrastructure' && (
-                  <div className="space-y-6">
-                    <Card className="bg-slate-800/50 border-slate-700">
-                      <CardHeader className="border-b border-slate-700">
-                        <CardTitle className="text-white flex items-center gap-2">
-                          <Bot className="h-5 w-5 text-red-400" />
-                          الذكاء الاصطناعي لتصنيف القنوات
-                        </CardTitle>
-                        <CardDescription className="text-slate-400">
-                          تشغيل التحليل الذكي لاقتراح تصنيفات تلقائية للقنوات.
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent className="p-6 space-y-4">
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                          <p className="text-sm text-slate-300">
-                            سيتم تحليل العناوين والأوصاف لإنشاء تصنيفات مقترحة.
-                          </p>
-                          <Button
-                            className="bg-gradient-to-r from-red-600 to-red-700"
-                            onClick={handleRunAiCategorization}
-                            disabled={aiCategorizeRunning}
-                          >
-                            {aiCategorizeRunning ? 'جاري التحليل...' : 'تشغيل التحليل'}
-                          </Button>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                          {aiCategorizeResults.length === 0 ? (
-                            <div className="text-sm text-slate-400">
-                              لا توجد نتائج بعد. قم بتشغيل التحليل.
-                            </div>
-                          ) : (
-                            aiCategorizeResults.slice(0, 6).map((result) => (
-                              <div
-                                key={result.id}
-                                className="rounded-lg border border-slate-700 bg-slate-900/40 p-4"
-                              >
-                                <p className="text-slate-200 font-medium">{result.title}</p>
-                                <p className="text-xs text-slate-500">
-                                  التصنيف المقترح: {result.category}
-                                </p>
-                                <p className="text-xs text-slate-400">
-                                  نسبة الثقة: {Math.round(result.confidence * 100)}%
-                                </p>
-                              </div>
-                            ))
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
+          <nav className="p-4 space-y-2">
+            <Button
+              variant={activeTab === 'streams' ? 'default' : 'ghost'}
+              className={`w-full justify-start ${
+                activeTab === 'streams'
+                  ? 'bg-gradient-to-r from-red-600 to-red-700 text-white'
+                  : 'text-slate-300 hover:bg-slate-800'
+              }`}
+              onClick={() => setActiveTab('streams')}
+            >
+              <Tv className="h-5 w-5" />
+              {sidebarOpen && <span className="mr-2">البث المباشر</span>}
+            </Button>
 
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                      <Card className="bg-slate-800/50 border-slate-700">
-                        <CardHeader className="border-b border-slate-700">
-                          <CardTitle className="text-white flex items-center gap-2">
-                            <Cloud className="h-5 w-5 text-red-400" />
-                            تكامل CDN
-                          </CardTitle>
-                          <CardDescription className="text-slate-400">
-                            إعداد تكامل Cloudflare/Fastly لتسريع المحتوى عالمياً.
-                          </CardDescription>
-                        </CardHeader>
-                        <CardContent className="p-6 space-y-4">
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                              <Label className="text-slate-300">المزوّد</Label>
-                              <select
-                                value={cdnConfig.provider}
-                                onChange={(event) =>
-                                  setCdnConfig({ ...cdnConfig, provider: event.target.value })
-                                }
-                                className="w-full bg-slate-800 border border-slate-700 text-white rounded-md p-2"
-                              >
-                                <option value="cloudflare">Cloudflare</option>
-                                <option value="fastly">Fastly</option>
-                                <option value="akamai">Akamai</option>
-                              </select>
-                            </div>
-                            <div className="space-y-2">
-                              <Label className="text-slate-300">Zone/Service ID</Label>
-                              <Input
-                                value={cdnConfig.zoneId}
-                                onChange={(event) =>
-                                  setCdnConfig({ ...cdnConfig, zoneId: event.target.value })
-                                }
-                                className="bg-slate-800 border-slate-700 text-white"
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label className="text-slate-300">مدة التخزين المؤقت (ثانية)</Label>
-                              <Input
-                                type="number"
-                                value={cdnConfig.cacheTtl}
-                                onChange={(event) =>
-                                  setCdnConfig({
-                                    ...cdnConfig,
-                                    cacheTtl: Number(event.target.value),
-                                  })
-                                }
-                                className="bg-slate-800 border-slate-700 text-white"
-                              />
-                            </div>
-                            <div className="flex items-center justify-between rounded-lg border border-slate-700 p-3">
-                              <div>
-                                <p className="text-sm text-slate-200">تفعيل CDN</p>
-                                <p className="text-xs text-slate-500">
-                                  توزيع عالمي مع قواعد كاش مخصصة.
-                                </p>
-                              </div>
-                              <Switch
-                                checked={cdnConfig.enabled}
-                                onCheckedChange={(value) =>
-                                  setCdnConfig({ ...cdnConfig, enabled: value })
-                                }
-                              />
-                            </div>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <label className="flex items-center gap-2 text-sm text-slate-300">
-                              <input
-                                type="checkbox"
-                                checked={cdnConfig.purgeOnPublish}
-                                onChange={(event) =>
-                                  setCdnConfig({ ...cdnConfig, purgeOnPublish: event.target.checked })
-                                }
-                                className="h-4 w-4 accent-red-500"
-                              />
-                              مسح الكاش عند النشر
-                            </label>
-                            <Button
-                              variant="outline"
-                              className="border-slate-700 text-slate-300"
-                              onClick={handleSaveCdnConfig}
-                            >
-                              حفظ الإعدادات
-                            </Button>
-                          </div>
-                          {cdnStatus && <p className="text-xs text-slate-400">{cdnStatus}</p>}
-                        </CardContent>
-                      </Card>
+            <Button
+              variant={activeTab === 'users' ? 'default' : 'ghost'}
+              className={`w-full justify-start ${
+                activeTab === 'users'
+                  ? 'bg-gradient-to-r from-red-600 to-red-700 text-white'
+                  : 'text-slate-300 hover:bg-slate-800'
+              }`}
+              onClick={() => setActiveTab('users')}
+            >
+              <Users className="h-5 w-5" />
+              {sidebarOpen && <span className="mr-2">المستخدمون</span>}
+            </Button>
 
-                      <Card className="bg-slate-800/50 border-slate-700">
-                        <CardHeader className="border-b border-slate-700">
-                          <CardTitle className="text-white flex items-center gap-2">
-                            <ServerCog className="h-5 w-5 text-red-400" />
-                            موازنة الحمل
-                          </CardTitle>
-                          <CardDescription className="text-slate-400">
-                            توزيع الحمل عبر الخوادم وتقليل الأعطال.
-                          </CardDescription>
-                        </CardHeader>
-                        <CardContent className="p-6 space-y-4">
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                              <Label className="text-slate-300">الاستراتيجية</Label>
-                              <select
-                                value={loadBalancingConfig.strategy}
-                                onChange={(event) =>
-                                  setLoadBalancingConfig({
-                                    ...loadBalancingConfig,
-                                    strategy: event.target.value,
-                                  })
-                                }
-                                className="w-full bg-slate-800 border border-slate-700 text-white rounded-md p-2"
-                              >
-                                <option value="round-robin">Round Robin</option>
-                                <option value="least-connections">Least Connections</option>
-                                <option value="geo-aware">Geo Aware</option>
-                              </select>
-                            </div>
-                            <div className="space-y-2">
-                              <Label className="text-slate-300">رابط فحص الصحة</Label>
-                              <Input
-                                value={loadBalancingConfig.healthCheckUrl}
-                                onChange={(event) =>
-                                  setLoadBalancingConfig({
-                                    ...loadBalancingConfig,
-                                    healthCheckUrl: event.target.value,
-                                  })
-                                }
-                                placeholder="https://example.com/health"
-                                className="bg-slate-800 border-slate-700 text-white"
-                              />
-                            </div>
-                            <div className="flex items-center justify-between rounded-lg border border-slate-700 p-3">
-                              <div>
-                                <p className="text-sm text-slate-200">تبديل تلقائي</p>
-                                <p className="text-xs text-slate-500">تحويل الحركة عند الأعطال.</p>
-                              </div>
-                              <Switch
-                                checked={loadBalancingConfig.autoFailover}
-                                onCheckedChange={(value) =>
-                                  setLoadBalancingConfig({
-                                    ...loadBalancingConfig,
-                                    autoFailover: value,
-                                  })
-                                }
-                              />
-                            </div>
-                            <div className="flex items-center justify-between rounded-lg border border-slate-700 p-3">
-                              <div>
-                                <p className="text-sm text-slate-200">توزيع أوزان</p>
-                                <p className="text-xs text-slate-500">إعطاء أولوية لخادم رئيسي.</p>
-                              </div>
-                              <Switch
-                                checked={loadBalancingConfig.weighted}
-                                onCheckedChange={(value) =>
-                                  setLoadBalancingConfig({
-                                    ...loadBalancingConfig,
-                                    weighted: value,
-                                  })
-                                }
-                              />
-                            </div>
-                          </div>
-                          {loadBalancingConfig.weighted && (
-                            <div className="grid grid-cols-2 gap-4 text-sm text-slate-300">
-                              <div className="space-y-2">
-                                <Label className="text-slate-300">وزن الخادم الأساسي</Label>
-                                <Input
-                                  type="number"
-                                  value={loadBalancingConfig.primaryWeight}
-                                  onChange={(event) =>
-                                    setLoadBalancingConfig({
-                                      ...loadBalancingConfig,
-                                      primaryWeight: Number(event.target.value),
-                                    })
-                                  }
-                                  className="bg-slate-800 border-slate-700 text-white"
-                                />
-                              </div>
-                              <div className="space-y-2">
-                                <Label className="text-slate-300">وزن الخادم الثانوي</Label>
-                                <Input
-                                  type="number"
-                                  value={loadBalancingConfig.secondaryWeight}
-                                  onChange={(event) =>
-                                    setLoadBalancingConfig({
-                                      ...loadBalancingConfig,
-                                      secondaryWeight: Number(event.target.value),
-                                    })
-                                  }
-                                  className="bg-slate-800 border-slate-700 text-white"
-                                />
-                              </div>
-                            </div>
-                          )}
-                          <div className="flex items-center justify-between">
-                            <p className="text-xs text-slate-400">
-                              نسبة توزيع الخوادم الحالية: {loadBalancingConfig.primaryWeight}% /
-                              {loadBalancingConfig.secondaryWeight}%
-                            </p>
-                            <Button
-                              variant="outline"
-                              className="border-slate-700 text-slate-300"
-                              onClick={handleSaveLoadBalancing}
-                            >
-                              حفظ الإعدادات
-                            </Button>
-                          </div>
-                          {loadBalancingStatus && (
-                            <p className="text-xs text-slate-400">{loadBalancingStatus}</p>
-                          )}
-                        </CardContent>
-                      </Card>
-                    </div>
+            <Button
+              variant={activeTab === 'ads' ? 'default' : 'ghost'}
+              className={`w-full justify-start ${
+                activeTab === 'ads'
+                  ? 'bg-gradient-to-r from-red-600 to-red-700 text-white'
+                  : 'text-slate-300 hover:bg-slate-800'
+              }`}
+              onClick={() => setActiveTab('ads')}
+            >
+              <ImageIcon className="h-5 w-5" />
+              {sidebarOpen && <span className="mr-2">الإعلانات</span>}
+            </Button>
+          </nav>
 
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                       <Card className="bg-slate-800/50 border-slate-700">
@@ -4670,497 +3846,137 @@ export default function AdminDashboard() {
                               {autoScalingConfig.maxServers} خادم.
                             </p>
                             <Button
-                              variant="outline"
-                              className="border-slate-700 text-slate-300"
-                              onClick={handleSaveAutoScaling}
-                            >
-                              حفظ الإعدادات
-                            </Button>
-                          </div>
-                          {autoScalingStatus && (
-                            <p className="text-xs text-slate-400">{autoScalingStatus}</p>
-                          )}
-                        </CardContent>
-                      </Card>
-
-                      <Card className="bg-slate-800/50 border-slate-700">
-                        <CardHeader className="border-b border-slate-700">
-                          <CardTitle className="text-white flex items-center gap-2">
-                            <Database className="h-5 w-5 text-red-400" />
-                            النسخ الاحتياطي الخارجي
-                          </CardTitle>
-                          <CardDescription className="text-slate-400">
-                            إرسال النسخ الاحتياطية إلى مزود خارجي آمن.
-                          </CardDescription>
-                        </CardHeader>
-                        <CardContent className="p-6 space-y-4">
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                              <Label className="text-slate-300">المزوّد</Label>
-                              <select
-                                value={offsiteBackupConfig.provider}
-                                onChange={(event) =>
-                                  setOffsiteBackupConfig({
-                                    ...offsiteBackupConfig,
-                                    provider: event.target.value,
-                                  })
-                                }
-                                className="w-full bg-slate-800 border border-slate-700 text-white rounded-md p-2"
-                              >
-                                <option value="s3">Amazon S3</option>
-                                <option value="backblaze">Backblaze</option>
-                                <option value="gcs">Google Cloud Storage</option>
-                              </select>
-                            </div>
-                            <div className="space-y-2">
-                              <Label className="text-slate-300">اسم الحاوية</Label>
-                              <Input
-                                value={offsiteBackupConfig.bucket}
-                                onChange={(event) =>
-                                  setOffsiteBackupConfig({
-                                    ...offsiteBackupConfig,
-                                    bucket: event.target.value,
-                                  })
-                                }
-                                className="bg-slate-800 border-slate-700 text-white"
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label className="text-slate-300">المنطقة</Label>
-                              <Input
-                                value={offsiteBackupConfig.region}
-                                onChange={(event) =>
-                                  setOffsiteBackupConfig({
-                                    ...offsiteBackupConfig,
-                                    region: event.target.value,
-                                  })
-                                }
-                                className="bg-slate-800 border-slate-700 text-white"
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label className="text-slate-300">الجدولة</Label>
-                              <select
-                                value={offsiteBackupConfig.schedule}
-                                onChange={(event) =>
-                                  setOffsiteBackupConfig({
-                                    ...offsiteBackupConfig,
-                                    schedule: event.target.value,
-                                  })
-                                }
-                                className="w-full bg-slate-800 border border-slate-700 text-white rounded-md p-2"
-                              >
-                                <option value="daily">يومي</option>
-                                <option value="weekly">أسبوعي</option>
-                                <option value="monthly">شهري</option>
-                              </select>
-                            </div>
-                          </div>
-                          <div className="flex items-center justify-between rounded-lg border border-slate-700 p-3">
-                            <div>
-                              <p className="text-sm text-slate-200">تشفير النسخ الاحتياطية</p>
-                              <p className="text-xs text-slate-500">تفعيل تشفير قبل الإرسال.</p>
-                            </div>
-                            <Switch
-                              checked={offsiteBackupConfig.encryption}
-                              onCheckedChange={(value) =>
-                                setOffsiteBackupConfig({
-                                  ...offsiteBackupConfig,
-                                  encryption: value,
-                                })
-                              }
-                            />
-                          </div>
-                          <div className="flex flex-wrap items-center justify-between gap-3">
-                            <Button
-                              variant="outline"
-                              className="border-slate-700 text-slate-300"
-                              onClick={handleSaveOffsiteBackup}
-                            >
-                              حفظ الإعدادات
-                            </Button>
-                            <Button
+                              onClick={editingStream ? handleUpdateStream : handleCreateStream}
                               className="bg-gradient-to-r from-red-600 to-red-700"
-                              onClick={handleRunOffsiteBackup}
                             >
-                              تشغيل نسخة خارجية الآن
+                              {editingStream ? 'حفظ التعديلات' : 'إضافة'}
                             </Button>
-                          </div>
-                          <div className="text-xs text-slate-400">
-                            آخر تشغيل:{' '}
-                            {offsiteBackupConfig.lastRunAt
-                              ? new Date(offsiteBackupConfig.lastRunAt).toLocaleString('ar')
-                              : 'لم يتم بعد'}
-                          </div>
-                          {offsiteBackupStatus && (
-                            <p className="text-xs text-slate-400">{offsiteBackupStatus}</p>
-                          )}
-                        </CardContent>
-                      </Card>
+                          </DialogFooter>
+                        </DialogContent>
+                      </Dialog>
                     </div>
-                  </div>
-                )}
 
-                {activeTab === 'abTesting' && (
-                  <div className="space-y-6">
-                    <Card className="bg-slate-800/50 border-slate-700">
-                      <CardHeader className="border-b border-slate-700">
-                        <CardTitle className="text-white flex items-center gap-2">
-                          <BarChart3 className="h-5 w-5 text-red-400" />
-                          مقارنة أداء الخوادم
-                        </CardTitle>
-                        <CardDescription className="text-slate-400">
-                          تتبع الخادم الأكثر استخداماً واقتراحات إزالة الخوادم منخفضة الأداء.
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent className="p-6 space-y-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <Label className="text-slate-300">نافذة القياس (بالدقائق)</Label>
-                            <Input
-                              type="number"
-                              value={abTestingConfig.sampleWindowMinutes}
-                              onChange={(event) =>
-                                setAbTestingConfig({
-                                  ...abTestingConfig,
-                                  sampleWindowMinutes: Number(event.target.value),
-                                })
-                              }
-                              className="bg-slate-800 border-slate-700 text-white"
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label className="text-slate-300">الحد الأدنى للعينات</Label>
-                            <Input
-                              type="number"
-                              value={abTestingConfig.minSamples}
-                              onChange={(event) =>
-                                setAbTestingConfig({
-                                  ...abTestingConfig,
-                                  minSamples: Number(event.target.value),
-                                })
-                              }
-                              className="bg-slate-800 border-slate-700 text-white"
-                            />
-                          </div>
-                        </div>
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                          <div className="flex items-center gap-4">
-                            <label className="flex items-center gap-2 text-sm text-slate-300">
-                              <input
-                                type="checkbox"
-                                checked={abTestingConfig.removeLowPriority}
-                                onChange={(event) =>
-                                  setAbTestingConfig({
-                                    ...abTestingConfig,
-                                    removeLowPriority: event.target.checked,
-                                  })
-                                }
-                                className="h-4 w-4 accent-red-500"
-                              />
-                              إزالة الخوادم منخفضة الأداء تلقائياً
-                            </label>
-                            <label className="flex items-center gap-2 text-sm text-slate-300">
-                              <input
-                                type="checkbox"
-                                checked={abTestingConfig.failoverEnabled}
-                                onChange={(event) =>
-                                  setAbTestingConfig({
-                                    ...abTestingConfig,
-                                    failoverEnabled: event.target.checked,
-                                  })
-                                }
-                                className="h-4 w-4 accent-red-500"
-                              />
-                              تفعيل التحويل التلقائي (Failover)
-                            </label>
-                          </div>
-                          <Button
-                            className="bg-gradient-to-r from-red-600 to-red-700"
-                            onClick={handleRunAbTest}
-                            disabled={abTestingRunning}
-                          >
-                            {abTestingRunning ? 'جاري القياس...' : 'تشغيل الاختبار'}
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    {abTestingReport && (
-                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        <Card className="bg-slate-800/50 border-slate-700">
-                          <CardHeader className="border-b border-slate-700">
-                            <CardTitle className="text-white">الخادم الأفضل</CardTitle>
-                            <CardDescription className="text-slate-400">
-                              أكثر خادم تم اختياره في الفترة الأخيرة.
-                            </CardDescription>
-                          </CardHeader>
-                          <CardContent className="p-6">
-                            <p className="text-sm text-slate-400">إجمالي الطلبات</p>
-                            <p className="text-3xl text-white mb-4">
-                              {abTestingReport.totalRequests}
-                            </p>
-                            <div className="rounded-lg border border-slate-700 bg-slate-900/40 p-4">
-                              <p className="text-slate-300 text-sm">الخادم الأعلى</p>
-                              <p className="text-white text-xl">
-                                {abTestingReport.topServer?.name ?? 'غير متوفر'}
-                              </p>
-                              <p className="text-xs text-slate-400">
-                                نسبة الاستخدام: {abTestingReport.topServer?.usage ?? 0}%
-                              </p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {streams.map((stream) => (
+                        <Card key={stream.id} className="bg-slate-800/50 border-slate-700">
+                          <CardHeader>
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <CardTitle className="text-white text-lg">
+                                  {stream.title}
+                                </CardTitle>
+                                <CardDescription className="text-slate-400 mt-2">
+                                  {stream.description || 'لا يوجد وصف'}
+                                </CardDescription>
+                              </div>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="text-slate-400 hover:text-white"
+                                  >
+                                    <MoreVertical className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent className="bg-slate-900 border-slate-700">
+                                  <DropdownMenuItem
+                                    onClick={() => openStreamForm(stream)}
+                                    className="text-slate-300 hover:bg-slate-800"
+                                  >
+                                    <Edit className="mr-2 h-4 w-4" />
+                                    تعديل
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => handleDeleteStream(stream.id)}
+                                    className="text-red-400 hover:bg-slate-800"
+                                  >
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                    حذف
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             </div>
-                          </CardContent>
-                        </Card>
-
-                        <Card className="bg-slate-800/50 border-slate-700">
-                          <CardHeader className="border-b border-slate-700">
-                            <CardTitle className="text-white">الخوادم المتعثرة</CardTitle>
-                            <CardDescription className="text-slate-400">
-                              خوادم منخفضة الأداء بحاجة لإعادة توزيع.
-                            </CardDescription>
                           </CardHeader>
-                          <CardContent className="p-6 space-y-3">
-                            {abTestingReport.laggingServers.length === 0 ? (
-                              <p className="text-sm text-slate-400">لا توجد خوادم متعثرة حالياً.</p>
-                            ) : (
-                              abTestingReport.laggingServers.map((server) => (
+                          <CardContent>
+                            {stream.thumbnail && (
+                              <img
+                                src={stream.thumbnail}
+                                alt={stream.title}
+                                className="w-full h-32 object-cover rounded-lg mb-4"
+                              />
+                            )}
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-slate-400">
+                                {stream.servers.length} خادم
+                              </span>
+                              <span
+                                className={`px-2 py-1 rounded ${
+                                  stream.published
+                                    ? 'bg-green-500/20 text-green-400'
+                                    : 'bg-yellow-500/20 text-yellow-400'
+                                }`}
+                              >
+                                {stream.published ? 'منشور' : 'مسودة'}
+                              </span>
+                            </div>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="w-full mt-4 border-slate-700 text-slate-300"
+                              onClick={() => openServerForm(stream.id)}
+                            >
+                              <Plus className="mr-2 h-4 w-4" />
+                              إضافة خادم
+                            </Button>
+                            <div className="mt-4 space-y-2">
+                              {stream.servers.map((server) => (
                                 <div
                                   key={server.id}
-                                  className="rounded-lg border border-slate-700 bg-slate-900/40 p-3"
+                                  className="flex items-center justify-between bg-slate-900/50 p-3 rounded-lg"
                                 >
-                                  <p className="text-slate-200">{server.name}</p>
-                                  <p className="text-xs text-slate-400">
-                                    الاستخدام: {server.usage}%
-                                  </p>
+                                  <div className="flex-1">
+                                    <p className="text-white text-sm font-medium">
+                                      {server.name}
+                                    </p>
+                                    <p className="text-slate-500 text-xs truncate">
+                                      {server.url}
+                                    </p>
+                                  </div>
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="text-slate-400 hover:text-white"
+                                      >
+                                        <MoreVertical className="h-4 w-4" />
+                                      </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent className="bg-slate-900 border-slate-700">
+                                      <DropdownMenuItem
+                                        onClick={() => openServerForm(stream.id, server)}
+                                        className="text-slate-300 hover:bg-slate-800"
+                                      >
+                                        <Edit className="mr-2 h-4 w-4" />
+                                        تعديل
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem
+                                        onClick={() => handleDeleteServer(server.id)}
+                                        className="text-red-400 hover:bg-slate-800"
+                                      >
+                                        <Trash2 className="mr-2 h-4 w-4" />
+                                        حذف
+                                      </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
                                 </div>
-                              ))
-                            )}
-                          </CardContent>
-                        </Card>
-
-                        <Card className="bg-slate-800/50 border-slate-700">
-                          <CardHeader className="border-b border-slate-700">
-                            <CardTitle className="text-white">توصيات التحويل</CardTitle>
-                            <CardDescription className="text-slate-400">
-                              اقتراحات للتحويل التلقائي وإزالة الأولويات.
-                            </CardDescription>
-                          </CardHeader>
-                          <CardContent className="p-6 space-y-3">
-                            <div className="rounded-lg border border-slate-700 bg-slate-900/40 p-3">
-                              <p className="text-sm text-slate-300">حالة الـ Failover</p>
-                              <p className="text-lg text-white">
-                                {abTestingReport.failoverSuggested ? 'مستحسن التفعيل' : 'مستقر حالياً'}
-                              </p>
-                            </div>
-                            <ul className="text-xs text-slate-400 space-y-2">
-                              {abTestingReport.notes.map((note, index) => (
-                                <li key={index}>• {note}</li>
                               ))}
-                            </ul>
+                            </div>
                           </CardContent>
                         </Card>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {activeTab === 'featureFlags' && (
-                  <div className="space-y-6">
-                    <Card className="bg-slate-800/50 border-slate-700">
-                      <CardHeader className="border-b border-slate-700">
-                        <CardTitle className="text-white">تشغيل ميزات الموقع</CardTitle>
-                        <CardDescription className="text-slate-400">
-                          فعّل أو عطّل الميزات المرئية للمستخدمين في الواجهة الرئيسية وصفحات القنوات.
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent className="p-6 space-y-6">
-                        <div className="flex flex-wrap items-center gap-3">
-                          <Button
-                            className="bg-gradient-to-r from-red-600 to-red-700"
-                            onClick={() =>
-                              setFeatureFlags((prev) =>
-                                Object.fromEntries(Object.keys(prev).map((key) => [key, true])) as typeof prev
-                              )
-                            }
-                          >
-                            تفعيل الكل
-                          </Button>
-                          <Button
-                            variant="outline"
-                            className="border-slate-700 text-slate-300"
-                            onClick={() =>
-                              setFeatureFlags((prev) =>
-                                Object.fromEntries(Object.keys(prev).map((key) => [key, false])) as typeof prev
-                              )
-                            }
-                          >
-                            تعطيل الكل
-                          </Button>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {[
-                            { key: 'aiRecommendations', label: 'توصيات الذكاء الاصطناعي' },
-                            { key: 'pushNotifications', label: 'إشعارات الدفع' },
-                            { key: 'engagementAnalytics', label: 'تحليلات التفاعل' },
-                            { key: 'appsSection', label: 'روابط تطبيقات الهاتف والتلفزيون' },
-                            { key: 'offlineMode', label: 'الوضع دون اتصال' },
-                            { key: 'accessibility', label: 'خيارات إمكانية الوصول' },
-                            { key: 'userFeatures', label: 'المفضلة + المشاهدة الأخيرة' },
-                            { key: 'quickActions', label: 'القائمة السريعة داخل البطاقات' },
-                            { key: 'streamServerSelect', label: 'محدد سيرفرات البث في صفحة القناة' },
-                            { key: 'streamShortcuts', label: 'اختصارات لوحة المفاتيح في صفحة القناة' },
-                            { key: 'streamPip', label: 'زر PiP في صفحة القناة' },
-                            { key: 'streamPerformance', label: 'لوحة الأداء في صفحة القناة' },
-                            { key: 'streamRatings', label: 'التقييمات والمراجعات في صفحة القناة' },
-                            { key: 'streamSharing', label: 'مشاركة القناة في صفحة القناة' },
-                            { key: 'streamEpg', label: 'دليل البرامج (EPG) في صفحة القناة' },
-                            { key: 'liveChat', label: 'الدردشة المباشرة' },
-                            { key: 'webRtc', label: 'وضع WebRTC منخفض التأخير' },
-                          ].map((feature) => (
-                            <div
-                              key={feature.key}
-                              className="flex items-center justify-between rounded-lg border border-slate-700 bg-slate-900/40 p-4"
-                            >
-                              <span className="text-sm text-slate-200">{feature.label}</span>
-                              <Switch
-                                checked={featureFlags[feature.key as keyof typeof featureFlags]}
-                                onCheckedChange={(value) =>
-                                  setFeatureFlags((prev) => ({
-                                    ...prev,
-                                    [feature.key]: value,
-                                  }))
-                                }
-                              />
-                            </div>
-                          ))}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </div>
-                )}
-
-                {activeTab === 'siteSettings' && (
-                  <div className="space-y-6">
-                    <Card className="bg-slate-800/50 border-slate-700">
-                      <CardHeader className="border-b border-slate-700">
-                        <CardTitle className="text-white">إعدادات الهوية البصرية</CardTitle>
-                        <CardDescription className="text-slate-400">
-                          خصّص أيقونة الموقع، العنوان، اللون الأساسي والخط.
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent className="p-6 space-y-6">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <Label className="text-slate-300">عنوان الموقع</Label>
-                            <Input
-                              value={siteSettings.title}
-                              onChange={(event) =>
-                                setSiteSettings((prev) => ({ ...prev, title: event.target.value }))
-                              }
-                              className="bg-slate-800 border-slate-700 text-white"
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label className="text-slate-300">لون الموقع الأساسي</Label>
-                            <div className="flex items-center gap-3">
-                              <Input
-                                type="color"
-                                value={siteSettings.primaryColor}
-                                onChange={(event) =>
-                                  setSiteSettings((prev) => ({ ...prev, primaryColor: event.target.value }))
-                                }
-                                className="h-10 w-14 bg-slate-800 border-slate-700 p-1"
-                              />
-                              <Input
-                                value={siteSettings.primaryColor}
-                                onChange={(event) =>
-                                  setSiteSettings((prev) => ({ ...prev, primaryColor: event.target.value }))
-                                }
-                                className="bg-slate-800 border-slate-700 text-white"
-                              />
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <Label className="text-slate-300">أيقونة الموقع (رابط)</Label>
-                            <Input
-                              value={siteSettings.faviconUrl}
-                              onChange={(event) =>
-                                setSiteSettings((prev) => ({ ...prev, faviconUrl: event.target.value }))
-                              }
-                              placeholder="https://..."
-                              className="bg-slate-800 border-slate-700 text-white"
-                            />
-                            <input
-                              type="file"
-                              accept="image/*"
-                              onChange={(event) => handleFaviconUpload(event.target.files?.[0] ?? null)}
-                              className="text-xs text-slate-400"
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label className="text-slate-300">خط الموقع (رابط)</Label>
-                            <Input
-                              value={siteSettings.fontUrl}
-                              onChange={(event) =>
-                                setSiteSettings((prev) => ({ ...prev, fontUrl: event.target.value }))
-                              }
-                              placeholder="https://.../font.woff2"
-                              className="bg-slate-800 border-slate-700 text-white"
-                            />
-                            <input
-                              type="file"
-                              accept=".woff,.woff2,.ttf,.otf"
-                              onChange={(event) => handleFontUpload(event.target.files?.[0] ?? null)}
-                              className="text-xs text-slate-400"
-                            />
-                          </div>
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label className="text-slate-300">اسم الخط</Label>
-                          <Input
-                            value={siteSettings.fontName}
-                            onChange={(event) =>
-                              setSiteSettings((prev) => ({ ...prev, fontName: event.target.value }))
-                            }
-                            placeholder="Cairo"
-                            className="bg-slate-800 border-slate-700 text-white"
-                          />
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    <Card className="bg-slate-800/50 border-slate-700">
-                      <CardHeader className="border-b border-slate-700">
-                        <CardTitle className="text-white">القنوات المميزة</CardTitle>
-                        <CardDescription className="text-slate-400">
-                          أضف معرفات القنوات ليتم تثبيتها في الصفحة الرئيسية.
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent className="p-6 space-y-4">
-                        <Textarea
-                          value={featuredInput}
-                          onChange={(event) => setFeaturedInput(event.target.value)}
-                          placeholder="stream-id-1, stream-id-2"
-                          className="bg-slate-800 border-slate-700 text-white min-h-[120px]"
-                        />
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                          <span className="text-xs text-slate-400">
-                            سيتم حفظ القائمة وتثبيت القنوات في الواجهة الرئيسية.
-                          </span>
-                          <Button
-                            onClick={applyFeaturedStreams}
-                            className="bg-gradient-to-r from-red-600 to-red-700"
-                          >
-                            حفظ القنوات المميزة
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
+                      ))}
+                    </div>
                   </div>
                 )}
 
@@ -5236,22 +4052,6 @@ export default function AdminDashboard() {
                                 <option value="admin">مسؤول</option>
                               </select>
                             </div>
-                            <div className="space-y-2">
-                              <Label className="text-slate-300">المظهر</Label>
-                              <select
-                                value={userForm.theme}
-                                onChange={(e) =>
-                                  setUserForm({
-                                    ...userForm,
-                                    theme: e.target.value as 'light' | 'dark',
-                                  })
-                                }
-                                className="w-full bg-slate-800 border-slate-700 text-white rounded-md p-2"
-                              >
-                                <option value="light">فاتح</option>
-                                <option value="dark">داكن</option>
-                              </select>
-                            </div>
                           </div>
                           <DialogFooter>
                             <Button
@@ -5288,12 +4088,6 @@ export default function AdminDashboard() {
                                   الدور
                                 </th>
                                 <th className="px-6 py-4 text-right text-sm font-medium text-slate-300">
-                                  المظهر
-                                </th>
-                                <th className="px-6 py-4 text-right text-sm font-medium text-slate-300">
-                                  كلمة المرور
-                                </th>
-                                <th className="px-6 py-4 text-right text-sm font-medium text-slate-300">
                                   الإجراءات
                                 </th>
                               </tr>
@@ -5317,20 +4111,6 @@ export default function AdminDashboard() {
                                     >
                                       {user.role === 'admin' ? 'مسؤول' : 'مستخدم'}
                                     </span>
-                                  </td>
-                                  <td className="px-6 py-4 text-sm text-slate-300">
-                                    <span
-                                      className={`px-3 py-1 rounded-full text-xs font-medium ${
-                                        user.theme === 'dark'
-                                          ? 'bg-indigo-500/20 text-indigo-300'
-                                          : 'bg-emerald-500/20 text-emerald-300'
-                                      }`}
-                                    >
-                                      {user.theme === 'dark' ? 'داكن' : 'فاتح'}
-                                    </span>
-                                  </td>
-                                  <td className="px-6 py-4 text-sm text-slate-300">
-                                    {user.password ? 'محفوظ (مشفّر)' : 'غير متوفر'}
                                   </td>
                                   <td className="px-6 py-4">
                                     <div className="flex items-center gap-2">
