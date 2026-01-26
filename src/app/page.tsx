@@ -473,8 +473,35 @@ export default function Home() {
         }
       }
     };
+    const handleFeatureFlagsUpdate = (event: Event) => {
+      const customEvent = event as CustomEvent<Partial<typeof featureFlags>>;
+      if (customEvent.detail) {
+        setFeatureFlags((prev) => ({ ...prev, ...customEvent.detail }));
+      }
+    };
+    const handlePinnedUpdate = (event: Event) => {
+      const customEvent = event as CustomEvent<string[]>;
+      if (customEvent.detail) {
+        setPinnedStreams(new Set(customEvent.detail));
+      }
+    };
+    const handleSiteSettingsUpdate = (event: Event) => {
+      const customEvent = event as CustomEvent<typeof siteSettings>;
+      if (customEvent.detail) {
+        setSiteSettings(customEvent.detail);
+        applySiteSettings(customEvent.detail);
+      }
+    };
     window.addEventListener('storage', handleStorage);
-    return () => window.removeEventListener('storage', handleStorage);
+    window.addEventListener('feature-flags:update', handleFeatureFlagsUpdate);
+    window.addEventListener('pinned-streams:update', handlePinnedUpdate);
+    window.addEventListener('site-settings:update', handleSiteSettingsUpdate);
+    return () => {
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('feature-flags:update', handleFeatureFlagsUpdate);
+      window.removeEventListener('pinned-streams:update', handlePinnedUpdate);
+      window.removeEventListener('site-settings:update', handleSiteSettingsUpdate);
+    };
   }, []);
 
   useEffect(() => {
@@ -724,43 +751,7 @@ export default function Home() {
         title: parsed.title ?? parsed.siteTitle,
       };
       setSiteSettings(nextSettings);
-      if (nextSettings.title) {
-        document.title = nextSettings.title;
-      }
-      if (nextSettings.primaryColor) {
-        document.documentElement.style.setProperty('--brand-color', nextSettings.primaryColor);
-      }
-      if (nextSettings.fontName) {
-        document.documentElement.style.fontFamily = `${nextSettings.fontName}, ui-sans-serif, system-ui`;
-      }
-      if (nextSettings.fontUrl) {
-        const fontStyleId = 'custom-font-style';
-        let styleTag = document.getElementById(fontStyleId) as HTMLStyleElement | null;
-        if (!styleTag) {
-          styleTag = document.createElement('style');
-          styleTag.id = fontStyleId;
-          document.head.appendChild(styleTag);
-        }
-        const fontName = nextSettings.fontName || 'CustomFont';
-        styleTag.textContent = `
-@font-face {
-  font-family: '${fontName}';
-  src: url('${nextSettings.fontUrl}');
-  font-display: swap;
-}
-`;
-      }
-      if (nextSettings.faviconUrl) {
-        const faviconId = 'site-favicon';
-        let link = document.getElementById(faviconId) as HTMLLinkElement | null;
-        if (!link) {
-          link = document.createElement('link');
-          link.id = faviconId;
-          link.rel = 'icon';
-          document.head.appendChild(link);
-        }
-        link.href = nextSettings.faviconUrl;
-      }
+      applySiteSettings(nextSettings);
     } catch (error) {
       console.error('Failed to parse site settings:', error);
     }
@@ -1251,6 +1242,47 @@ export default function Home() {
     HD: 'border-blue-500 text-blue-600 dark:text-blue-400',
     SD: 'border-slate-500 text-slate-600 dark:text-slate-300',
     Unknown: 'border-slate-300 text-slate-500 dark:border-slate-600 dark:text-slate-400',
+  };
+
+  const applySiteSettings = (nextSettings: typeof siteSettings) => {
+    if (!nextSettings) return;
+    if (nextSettings.title) {
+      document.title = nextSettings.title;
+    }
+    if (nextSettings.primaryColor) {
+      document.documentElement.style.setProperty('--brand-color', nextSettings.primaryColor);
+    }
+    if (nextSettings.fontName) {
+      document.documentElement.style.fontFamily = `${nextSettings.fontName}, ui-sans-serif, system-ui`;
+    }
+    if (nextSettings.fontUrl) {
+      const fontStyleId = 'custom-font-style';
+      let styleTag = document.getElementById(fontStyleId) as HTMLStyleElement | null;
+      if (!styleTag) {
+        styleTag = document.createElement('style');
+        styleTag.id = fontStyleId;
+        document.head.appendChild(styleTag);
+      }
+      const fontName = nextSettings.fontName || 'CustomFont';
+      styleTag.textContent = `
+@font-face {
+  font-family: '${fontName}';
+  src: url('${nextSettings.fontUrl}');
+  font-display: swap;
+}
+`;
+    }
+    if (nextSettings.faviconUrl) {
+      const faviconId = 'site-favicon';
+      let link = document.getElementById(faviconId) as HTMLLinkElement | null;
+      if (!link) {
+        link = document.createElement('link');
+        link.id = faviconId;
+        link.rel = 'icon';
+        document.head.appendChild(link);
+      }
+      link.href = nextSettings.faviconUrl;
+    }
   };
 
   const continueWatching = recentlyWatched

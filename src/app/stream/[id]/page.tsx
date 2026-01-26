@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, useRef } from 'react';
 import Link from 'next/link';
+import { useParams } from 'next/navigation';
 import { Play, Tv, ArrowRight, Home, Server, Zap, AlertCircle, Info } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -53,7 +54,9 @@ interface StreamRecommendationSettings {
 const FEATURE_FLAGS_KEY = 'websiteFeatureFlags';
 const STREAM_RECOMMENDATIONS_KEY = 'streamRecommendations';
 
-export default function StreamPage({ params }: { params: { id: string } }) {
+export default function StreamPage() {
+  const params = useParams<{ id: string }>();
+  const streamId = params?.id ?? '';
   const [stream, setStream] = useState<StreamData | null>(null);
   const [selectedServer, setSelectedServer] = useState<Server | null>(null);
   const [loading, setLoading] = useState(true);
@@ -75,8 +78,9 @@ export default function StreamPage({ params }: { params: { id: string } }) {
   const [allStreams, setAllStreams] = useState<StreamSummary[]>([]);
 
   useEffect(() => {
-    fetchStream();
-  }, [params.id]);
+    if (!streamId) return;
+    fetchStream(streamId);
+  }, [streamId]);
 
   useEffect(() => {
     if (stream && stream.servers.length > 0 && !selectedServer) {
@@ -132,8 +136,29 @@ export default function StreamPage({ params }: { params: { id: string } }) {
         }
       }
     };
+    const handleFeatureFlagsUpdate = (event: Event) => {
+      const customEvent = event as CustomEvent<Partial<typeof featureFlags>>;
+      if (customEvent.detail) {
+        setFeatureFlags((prev) => ({ ...prev, ...customEvent.detail }));
+      }
+    };
+    const handleRecommendationUpdate = (event: Event) => {
+      const customEvent = event as CustomEvent<StreamRecommendationSettings>;
+      if (customEvent.detail) {
+        setRecommendationSettings({
+          mode: customEvent.detail.mode,
+          manualIds: Array.isArray(customEvent.detail.manualIds) ? customEvent.detail.manualIds : [],
+        });
+      }
+    };
     window.addEventListener('storage', handleStorage);
-    return () => window.removeEventListener('storage', handleStorage);
+    window.addEventListener('feature-flags:update', handleFeatureFlagsUpdate);
+    window.addEventListener('stream-recommendations:update', handleRecommendationUpdate);
+    return () => {
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('feature-flags:update', handleFeatureFlagsUpdate);
+      window.removeEventListener('stream-recommendations:update', handleRecommendationUpdate);
+    };
   }, []);
 
   useEffect(() => {
@@ -169,9 +194,9 @@ export default function StreamPage({ params }: { params: { id: string } }) {
     fetchStreams();
   }, [featureFlags.streamRecommended]);
 
-  const fetchStream = async () => {
+  const fetchStream = async (id: string) => {
     try {
-      const response = await fetch(`/api/streams/${params.id}`);
+      const response = await fetch(`/api/streams/${id}`);
       if (!response.ok) {
         throw new Error('Stream not found');
       }
