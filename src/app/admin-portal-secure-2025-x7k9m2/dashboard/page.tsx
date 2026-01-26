@@ -1348,65 +1348,73 @@ export default function AdminDashboard() {
         const line = lines[i].trim();
         if (!line) continue;
 
-        // Parse EXTINF metadata
-        if (line.startsWith('#EXTINF:')) {
-          if (currentChannel.url) {
-            channels.push({ ...currentChannel } as PlaylistChannel);
-          }
-          currentChannel = { url: '' };
+  const handleCreateCategory = () => {
+    if (!categoryName.trim()) {
+      toast.error('أدخل اسم التصنيف');
+      return;
+    }
+    const newCategory: Category = {
+      id:
+        typeof crypto !== 'undefined' && 'randomUUID' in crypto
+          ? crypto.randomUUID()
+          : `category-${Date.now()}`,
+      name: categoryName.trim(),
+      parentId: categoryParentId || undefined,
+    };
+    setCategories((prev) => [newCategory, ...prev]);
+    setCategoryName('');
+    setCategoryParentId('');
+    toast.success('تم إضافة التصنيف');
+  };
 
-          const extinfLine = line.substring(8); // Remove #EXTINF:
-          // Split by comma - everything after the last comma is the channel name
-          const lastCommaIndex = extinfLine.lastIndexOf(',');
-          if (lastCommaIndex !== -1) {
-            const metadataPart = extinfLine.substring(0, lastCommaIndex);
-            const channelName = extinfLine.substring(lastCommaIndex + 1).trim();
-
-            // Set channel name (remove quotes if present)
-            currentChannel.channelName = channelName.replace(/^"|"$/g, '');
-
-            // Parse metadata attributes
-            const attributes = metadataPart.split(/\s+/);
-            for (const attr of attributes) {
-              if (attr.includes('=')) {
-                const [key, value] = attr.split('=');
-                const cleanKey = key.trim().toLowerCase();
-                const cleanValue = value.replace(/^"|"$/g, '').trim();
-
-                if (cleanKey === 'tvg-id') {
-                  currentChannel.channelId = cleanValue;
-                } else if (cleanKey === 'tvg-logo') {
-                  currentChannel.logo = cleanValue;
-                } else if (cleanKey === 'tvg-name') {
-                  if (!currentChannel.channelName) {
-                    currentChannel.channelName = cleanValue;
-                  }
-                } else if (cleanKey === 'group-title') {
-                  currentChannel.groupTitle = cleanValue;
-                }
-              }
-            }
-          }
-        }
-
-        // Parse stream URL
-        if (!line.startsWith('#') && line.trim()) {
-          currentChannel.url = line.trim();
-        }
-      }
+  const handleDeleteCategory = (categoryId: string) => {
+    setCategories((prev) => prev.filter((category) => category.id !== categoryId));
+    setStreams((prev) =>
+      prev.map((stream) =>
+        stream.categoryId === categoryId ? { ...stream, categoryId: null } : stream
+      )
+    );
+    toast.success('تم حذف التصنيف');
+  };
 
       // Add last channel
       if (currentChannel.url) {
         channels.push({ ...currentChannel } as PlaylistChannel);
       }
 
-      setParsedChannels(channels);
-      toast.success(`تم تحليل ${channels.length} قناة من القائمة`);
-      setLoadingChannels(false);
+  const handleMergeDuplicates = async (primaryId: string, duplicateIds: string[]) => {
+    if (duplicateIds.length === 0) return;
+    setDuplicateProcessing(true);
+    try {
+      const primaryStream = streams.find((stream) => stream.id === primaryId);
+      let priorityBase = primaryStream?.servers.length ?? 0;
+      const duplicates = streams.filter((stream) => duplicateIds.includes(stream.id));
+      const serverCreates = duplicates.flatMap((stream) =>
+        stream.servers.map((server) => ({
+          streamId: primaryId,
+          name: server.name || `الخادم ${priorityBase + 1}`,
+          url: server.url,
+          priority: priorityBase++,
+        }))
+      );
+      await Promise.all(
+        serverCreates.map((server) =>
+          fetch('/api/servers', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(server),
+          })
+        )
+      );
+      await Promise.all(
+        duplicateIds.map((id) => fetch(`/api/streams/${id}`, { method: 'DELETE' }))
+      );
+      toast.success('تم دمج التكرارات');
+      await fetchData();
     } catch (error) {
-      console.error('Error parsing playlist:', error);
-      toast.error('فشل في تحليل ملف القائمة');
-      setLoadingChannels(false);
+      toast.error('فشل دمج التكرارات');
+    } finally {
+      setDuplicateProcessing(false);
     }
   };
 
@@ -1460,6 +1468,7 @@ export default function AdminDashboard() {
       toast.error('الرجا تحديد قناة واحدة على الأقل');
       return;
     }
+  };
 
     if (!editingStream) {
       toast.error('يجب إنشاء البث أولاً قبل إضافة القنوات');
@@ -1578,48 +1587,30 @@ export default function AdminDashboard() {
     });
   };
 
-  // User operations
-  const handleCreateUser = async () => {
+  const handleQualityTest = async () => {
+    if (!qualityUrl.trim()) {
+      toast.error('أدخل رابط البث');
+      return;
+    }
+    setQualityProcessing(true);
     try {
-      const response = await fetch('/api/users', {
+      const response = await fetch('/api/admin/quality-test', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(userForm),
+        body: JSON.stringify({ url: qualityUrl }),
       });
-      if (!response.ok) throw new Error('Failed to create user');
-      toast.success('تم إنشاء المستخدم بنجاح');
-      setUserFormOpen(false);
-      resetUserForm();
-      fetchData();
-    } catch (error) {
-      toast.error('فشل في إنشاء المستخدم');
-    }
-  };
-
-  const handleUpdateUser = async () => {
-    if (!editingUser) return;
-    try {
-      const response = await fetch('/api/users', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: editingUser.id, ...userForm }),
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'فشل اختبار الجودة');
+      }
+      setQualityReport({
+        status: 'success',
+        qualityLabel: data.qualityLabel,
+        resolution: data.resolution,
+        bitrateKbps: data.bitrateKbps,
+        latencyMs: data.latencyMs,
+        bufferMs: data.bufferMs,
       });
-      if (!response.ok) throw new Error('Failed to update user');
-      toast.success('تم تحديث المستخدم بنجاح');
-      setUserFormOpen(false);
-      setEditingUser(null);
-      resetUserForm();
-      fetchData();
-    } catch (error) {
-      toast.error('فشل في تحديث المستخدم');
-    }
-  };
-
-  const handleDeleteUser = async (id: string) => {
-    try {
-      await fetch(`/api/users?id=${id}`, { method: 'DELETE' });
-      toast.success('تم حذف المستخدم بنجاح');
-      fetchData();
     } catch (error) {
       toast.error('فشل في حذف المستخدم');
     }
@@ -1635,11 +1626,9 @@ export default function AdminDashboard() {
         role: user.role,
         theme: user.theme ?? 'light',
       });
-    } else {
-      setEditingUser(null);
-      resetUserForm();
+    } finally {
+      setQualityProcessing(false);
     }
-    setUserFormOpen(true);
   };
 
   const resetUserForm = () => {
@@ -1655,77 +1644,28 @@ export default function AdminDashboard() {
   // Ad operations
   const handleCreateAd = async () => {
     try {
-      const response = await fetch('/api/ads', {
+      const response = await fetch('/api/admin/preview-info', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(adForm),
+        body: JSON.stringify({ url }),
       });
-      if (!response.ok) throw new Error('Failed to create ad');
-      toast.success('تم إنشاء الإعلان بنجاح');
-      setAdFormOpen(false);
-      resetAdForm();
-      fetchData();
-    } catch (error) {
-      toast.error('فشل في إنشاء الإعلان');
-    }
-  };
-
-  const handleUpdateAd = async () => {
-    if (!editingAd) return;
-    try {
-      const response = await fetch('/api/ads', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: editingAd.id, ...adForm }),
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'فشل جلب بيانات البث');
+      }
+      setPreviewReport({
+        status: 'success',
+        codec: data.codec,
+        resolution: data.resolution,
+        bitrateKbps: data.bitrateKbps,
+        latencyMs: data.latencyMs,
       });
-      if (!response.ok) throw new Error('Failed to update ad');
-      toast.success('تم تحديث الإعلان بنجاح');
-      setAdFormOpen(false);
-      setEditingAd(null);
-      resetAdForm();
-      fetchData();
     } catch (error) {
-      toast.error('فشل في تحديث الإعلان');
-    }
-  };
-
-  const handleDeleteAd = async (id: string) => {
-    try {
-      await fetch(`/api/ads?id=${id}`, { method: 'DELETE' });
-      toast.success('تم حذف الإعلان بنجاح');
-      fetchData();
-    } catch (error) {
-      toast.error('فشل في حذف الإعلان');
-    }
-  };
-
-  const openAdForm = (ad?: Ad) => {
-    if (ad) {
-      setEditingAd(ad);
-      setAdForm({
-        streamId: '',
-        position: ad.position,
-        title: ad.title || '',
-        imageUrl: ad.imageUrl,
-        linkUrl: ad.linkUrl || '',
-        active: ad.active,
+      setPreviewReport({
+        status: 'failed',
+        message: error instanceof Error ? error.message : 'فشل جلب بيانات البث',
       });
-    } else {
-      setEditingAd(null);
-      resetAdForm();
     }
-    setAdFormOpen(true);
-  };
-
-  const resetAdForm = () => {
-    setAdForm({
-      streamId: '',
-      position: 'home-top',
-      title: '',
-      imageUrl: '',
-      linkUrl: '',
-      active: true,
-    });
   };
 
   return (
