@@ -191,11 +191,38 @@ interface Category {
   parentId?: string;
 }
 
-interface FeatureFlag {
-  id: string;
-  name: string;
-  description: string;
-  enabled: boolean;
+interface WebsiteFeatureFlags {
+  featuredChannels: boolean;
+  mainHero: boolean;
+  mainSearch: boolean;
+  mainFilters: boolean;
+  mainAds: boolean;
+  aiRecommendations: boolean;
+  pushNotifications: boolean;
+  engagementAnalytics: boolean;
+  appsSection: boolean;
+  offlineMode: boolean;
+  accessibility: boolean;
+  userFeatures: boolean;
+  quickActions: boolean;
+  liveChat: boolean;
+  webRtc: boolean;
+  profileAccount: boolean;
+  profilePreferences: boolean;
+  profileRecommendations: boolean;
+  profileFavorites: boolean;
+  profileHistory: boolean;
+  streamRecommended: boolean;
+  streamDescription: boolean;
+  streamAdsTop: boolean;
+  streamAdsBottom: boolean;
+  streamAdsSidebar: boolean;
+  streamServerSwitcher: boolean;
+}
+
+interface StreamRecommendationSettings {
+  mode: 'auto' | 'manual';
+  manualIds: string[];
 }
 
 interface AbTestVariant {
@@ -216,9 +243,13 @@ interface SiteSettings {
   heroMessage: string;
   supportEmail: string;
   defaultTheme: 'dark' | 'light';
+  faviconUrl?: string;
+  appIconUrl?: string;
 }
 
 const WEBSITE_SETTINGS_KEY = 'websiteSettings';
+const FEATURE_FLAGS_KEY = 'websiteFeatureFlags';
+const STREAM_RECOMMENDATIONS_KEY = 'streamRecommendations';
 
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<Tab>('streams');
@@ -316,26 +347,39 @@ export default function AdminDashboard() {
   const [categoryName, setCategoryName] = useState('');
   const [categoryParentId, setCategoryParentId] = useState('');
   const [categories, setCategories] = useState<Category[]>([]);
-  const [featureFlags, setFeatureFlags] = useState<FeatureFlag[]>([
-    {
-      id: 'smart-recommendations',
-      name: 'توصيات ذكية',
-      description: 'اقتراح قنوات بناءً على سجل المشاهدة.',
-      enabled: true,
-    },
-    {
-      id: 'low-bandwidth-mode',
-      name: 'وضع الباندويث المنخفض',
-      description: 'تخفيض الجودة تلقائياً عند انخفاض الشبكة.',
-      enabled: false,
-    },
-    {
-      id: 'live-chat',
-      name: 'الدردشة المباشرة',
-      description: 'تمكين الدردشة أثناء المشاهدة.',
-      enabled: false,
-    },
-  ]);
+  const [featureFlags, setFeatureFlags] = useState<WebsiteFeatureFlags>({
+    featuredChannels: true,
+    mainHero: true,
+    mainSearch: true,
+    mainFilters: true,
+    mainAds: true,
+    aiRecommendations: true,
+    pushNotifications: true,
+    engagementAnalytics: true,
+    appsSection: true,
+    offlineMode: true,
+    accessibility: true,
+    userFeatures: true,
+    quickActions: true,
+    liveChat: true,
+    webRtc: true,
+    profileAccount: true,
+    profilePreferences: true,
+    profileRecommendations: true,
+    profileFavorites: true,
+    profileHistory: true,
+    streamRecommended: true,
+    streamDescription: true,
+    streamAdsTop: true,
+    streamAdsBottom: true,
+    streamAdsSidebar: true,
+    streamServerSwitcher: true,
+  });
+  const [streamRecommendations, setStreamRecommendations] = useState<StreamRecommendationSettings>({
+    mode: 'auto',
+    manualIds: [],
+  });
+  const [streamSearchQuery, setStreamSearchQuery] = useState('');
   const [abTests, setAbTests] = useState<AbTest[]>([
     {
       id: 'server-routing',
@@ -363,6 +407,8 @@ export default function AdminDashboard() {
     heroMessage: 'أفضل بث مباشر بجودة عالية.',
     supportEmail: 'support@f2l.local',
     defaultTheme: 'dark',
+    faviconUrl: '',
+    appIconUrl: '',
   });
   const [autoScalingConfig, setAutoScalingConfig] = useState({
     minServers: 2,
@@ -381,8 +427,14 @@ export default function AdminDashboard() {
     }
     return a.title.localeCompare(b.title, 'ar');
   });
-  const totalStreamPages = Math.max(1, Math.ceil(sortedStreams.length / streamsPerPage));
-  const paginatedStreams = sortedStreams.slice(
+  const normalizedSearch = streamSearchQuery.trim().toLowerCase();
+  const filteredStreams = sortedStreams.filter((stream) => {
+    if (!normalizedSearch) return true;
+    const haystack = `${stream.title} ${stream.description ?? ''} ${stream.id}`.toLowerCase();
+    return haystack.includes(normalizedSearch);
+  });
+  const totalStreamPages = Math.max(1, Math.ceil(filteredStreams.length / streamsPerPage));
+  const paginatedStreams = filteredStreams.slice(
     (streamsPage - 1) * streamsPerPage,
     streamsPage * streamsPerPage
   );
@@ -435,6 +487,161 @@ export default function AdminDashboard() {
     { label: '18:00 - 21:00', value: '91%' },
   ];
 
+  const featureFlagSections: Array<{
+    title: string;
+    description: string;
+    flags: Array<{ key: keyof WebsiteFeatureFlags; name: string; description: string }>;
+  }> = [
+    {
+      title: 'ميزات الصفحة الرئيسية',
+      description: 'تحكم في الوحدات الظاهرة في الصفحة الرئيسية.',
+      flags: [
+        {
+          key: 'featuredChannels',
+          name: 'القنوات المميزة',
+          description: 'إبراز القنوات المثبتة كقنوات مميزة في الصفحة الرئيسية.',
+        },
+        {
+          key: 'mainHero',
+          name: 'رسالة الترحيب',
+          description: 'عرض رسالة الترحيب في أعلى الصفحة الرئيسية.',
+        },
+        {
+          key: 'mainSearch',
+          name: 'شريط البحث',
+          description: 'إظهار شريط البحث عن القنوات في الصفحة الرئيسية.',
+        },
+        {
+          key: 'mainFilters',
+          name: 'مرشحات القنوات',
+          description: 'إظهار فلاتر التصنيف واللغة والدولة.',
+        },
+        {
+          key: 'mainAds',
+          name: 'إعلانات الصفحة الرئيسية',
+          description: 'عرض مساحات الإعلانات في أعلى الصفحة الرئيسية.',
+        },
+        {
+          key: 'aiRecommendations',
+          name: 'توصيات الذكاء الاصطناعي',
+          description: 'إظهار لوحة التوصيات الذكية.',
+        },
+        {
+          key: 'appsSection',
+          name: 'قسم التطبيقات',
+          description: 'عرض قسم تطبيقات المنصة.',
+        },
+        {
+          key: 'offlineMode',
+          name: 'الوضع غير المتصل',
+          description: 'إتاحة تنزيل القنوات للمشاهدة دون اتصال.',
+        },
+        {
+          key: 'accessibility',
+          name: 'إعدادات الوصول',
+          description: 'عرض خيارات تباين عالي وحجم الخط.',
+        },
+        {
+          key: 'pushNotifications',
+          name: 'الإشعارات',
+          description: 'إظهار إعدادات إشعارات المتصفح.',
+        },
+        {
+          key: 'engagementAnalytics',
+          name: 'تحليلات التفاعل',
+          description: 'عرض بطاقات التفاعل في لوحة الصفحة الرئيسية.',
+        },
+        {
+          key: 'userFeatures',
+          name: 'ميزات المستخدم',
+          description: 'إظهار أدوات المفضلات والتفاعل السريع.',
+        },
+        {
+          key: 'quickActions',
+          name: 'القائمة السريعة',
+          description: 'إظهار إجراءات سريعة لكل قناة.',
+        },
+        {
+          key: 'liveChat',
+          name: 'الدردشة المباشرة',
+          description: 'عرض أداة الدردشة داخل الصفحة الرئيسية.',
+        },
+        {
+          key: 'webRtc',
+          name: 'WebRTC',
+          description: 'تمكين معاينات WebRTC التجريبية.',
+        },
+      ],
+    },
+    {
+      title: 'ميزات الملف الشخصي',
+      description: 'التحكم في أقسام صفحة الملف الشخصي.',
+      flags: [
+        {
+          key: 'profileAccount',
+          name: 'معلومات الحساب',
+          description: 'إظهار بطاقة معلومات الحساب وصورة الملف.',
+        },
+        {
+          key: 'profilePreferences',
+          name: 'التفضيلات',
+          description: 'إظهار إعدادات اللغة والثيم.',
+        },
+        {
+          key: 'profileRecommendations',
+          name: 'التوصيات',
+          description: 'عرض توصيات القنوات في الملف الشخصي.',
+        },
+        {
+          key: 'profileFavorites',
+          name: 'قوائم المفضلة',
+          description: 'عرض قوائم المفضلة في الملف الشخصي.',
+        },
+        {
+          key: 'profileHistory',
+          name: 'سجل المشاهدة',
+          description: 'عرض سجل القنوات التي تمت مشاهدتها.',
+        },
+      ],
+    },
+    {
+      title: 'ميزات صفحة البث',
+      description: 'التحكم في أقسام صفحة مشاهدة القناة.',
+      flags: [
+        {
+          key: 'streamServerSwitcher',
+          name: 'مبدّل الخوادم',
+          description: 'إظهار اختيار السيرفرات المتاحة.',
+        },
+        {
+          key: 'streamDescription',
+          name: 'وصف القناة',
+          description: 'عرض وصف القناة أسفل المشغل.',
+        },
+        {
+          key: 'streamRecommended',
+          name: 'القنوات الموصى بها',
+          description: 'عرض قنوات موصى بها أسفل البث.',
+        },
+        {
+          key: 'streamAdsTop',
+          name: 'إعلانات أعلى البث',
+          description: 'عرض إعلانات أعلى المشغل.',
+        },
+        {
+          key: 'streamAdsBottom',
+          name: 'إعلانات أسفل البث',
+          description: 'عرض إعلانات أسفل المشغل.',
+        },
+        {
+          key: 'streamAdsSidebar',
+          name: 'إعلانات جانبية',
+          description: 'إظهار الإعلانات الجانبية بجانب البث.',
+        },
+      ],
+    },
+  ];
+
   useEffect(() => {
     const storedPins = localStorage.getItem('pinnedStreams');
     if (storedPins) {
@@ -444,6 +651,9 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     localStorage.setItem('pinnedStreams', JSON.stringify([...pinnedStreams]));
+    window.dispatchEvent(
+      new CustomEvent('pinned-streams:update', { detail: [...pinnedStreams] })
+    );
   }, [pinnedStreams]);
 
   useEffect(() => {
@@ -459,12 +669,58 @@ export default function AdminDashboard() {
   }, []);
 
   useEffect(() => {
+    const storedFlags = localStorage.getItem(FEATURE_FLAGS_KEY);
+    if (storedFlags) {
+      try {
+        const parsed = JSON.parse(storedFlags) as Partial<WebsiteFeatureFlags>;
+        setFeatureFlags((prev) => ({ ...prev, ...parsed }));
+      } catch (error) {
+        console.error('Error parsing feature flags:', error);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(FEATURE_FLAGS_KEY, JSON.stringify(featureFlags));
+    window.dispatchEvent(new CustomEvent('feature-flags:update', { detail: featureFlags }));
+  }, [featureFlags]);
+
+  useEffect(() => {
+    const storedRecommendations = localStorage.getItem(STREAM_RECOMMENDATIONS_KEY);
+    if (storedRecommendations) {
+      try {
+        const parsed = JSON.parse(storedRecommendations) as StreamRecommendationSettings;
+        if (parsed.mode === 'manual' || parsed.mode === 'auto') {
+          setStreamRecommendations({
+            mode: parsed.mode,
+            manualIds: Array.isArray(parsed.manualIds) ? parsed.manualIds : [],
+          });
+        }
+      } catch (error) {
+        console.error('Error parsing stream recommendations:', error);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(STREAM_RECOMMENDATIONS_KEY, JSON.stringify(streamRecommendations));
+    window.dispatchEvent(
+      new CustomEvent('stream-recommendations:update', { detail: streamRecommendations })
+    );
+  }, [streamRecommendations]);
+
+  useEffect(() => {
     localStorage.setItem(WEBSITE_SETTINGS_KEY, JSON.stringify(siteSettings));
+    window.dispatchEvent(new CustomEvent('site-settings:update', { detail: siteSettings }));
   }, [siteSettings]);
 
   useEffect(() => {
     setStreamsPage((prev) => Math.min(prev, totalStreamPages));
   }, [totalStreamPages]);
+
+  useEffect(() => {
+    setStreamsPage(1);
+  }, [streamSearchQuery]);
 
   useEffect(() => {
     const normalizedMap = new Map<string, Stream[]>();
@@ -544,6 +800,22 @@ export default function AdminDashboard() {
         next.add(streamId);
       }
       return next;
+    });
+  };
+
+  const toggleManualRecommendation = (streamId: string) => {
+    setStreamRecommendations((prev) => {
+      const exists = prev.manualIds.includes(streamId);
+      if (!exists && prev.manualIds.length >= 2) {
+        toast.error('يمكن اختيار قناتين فقط كحد أقصى.');
+        return prev;
+      }
+      return {
+        ...prev,
+        manualIds: exists
+          ? prev.manualIds.filter((id) => id !== streamId)
+          : [...prev.manualIds, streamId],
+      };
     });
   };
 
@@ -1899,8 +2171,24 @@ export default function AdminDashboard() {
                 {/* Streams Tab */}
                 {activeTab === 'streams' && (
                   <div className="space-y-6">
-                    <div className="flex justify-between items-center gap-4">
-                      <p className="text-slate-300">عدد البثوص: {streams.length}</p>
+                    <div className="flex flex-wrap justify-between items-center gap-4">
+                      <div>
+                        <p className="text-slate-300">
+                          عدد البثوص: {filteredStreams.length}
+                          {streamSearchQuery.trim() && (
+                            <span className="text-xs text-slate-500"> (الإجمالي {streams.length})</span>
+                          )}
+                        </p>
+                      </div>
+                      <div className="flex flex-1 flex-wrap items-center justify-end gap-3">
+                        <div className="min-w-[220px] flex-1 max-w-sm">
+                          <Input
+                            value={streamSearchQuery}
+                            onChange={(event) => setStreamSearchQuery(event.target.value)}
+                            placeholder="ابحث عن قناة..."
+                            className="bg-slate-800 border-slate-700 text-white"
+                          />
+                        </div>
                       <Button
                         onClick={checkAllStreamStatus}
                         disabled={streams.length === 0 || checkingStatus}
@@ -2181,6 +2469,7 @@ export default function AdminDashboard() {
                           </DialogFooter>
                         </DialogContent>
                       </Dialog>
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -3690,32 +3979,94 @@ export default function AdminDashboard() {
 
                 {activeTab === 'featureFlags' && (
                   <div className="space-y-6">
+                    {featureFlagSections.map((section) => (
+                      <Card key={section.title} className="bg-slate-800/50 border-slate-700">
+                        <CardHeader className="border-b border-slate-700">
+                          <CardTitle className="text-white">{section.title}</CardTitle>
+                          <CardDescription className="text-slate-400">
+                            {section.description}
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent className="p-6 space-y-4">
+                          {section.flags.map((flag) => (
+                            <div
+                              key={flag.key}
+                              className="flex items-center justify-between rounded-lg border border-slate-700 p-4"
+                            >
+                              <div>
+                                <p className="text-white font-medium">{flag.name}</p>
+                                <p className="text-xs text-slate-400">{flag.description}</p>
+                              </div>
+                              <Switch
+                                checked={featureFlags[flag.key]}
+                                onCheckedChange={(checked) =>
+                                  setFeatureFlags((prev) => ({
+                                    ...prev,
+                                    [flag.key]: checked,
+                                  }))
+                                }
+                              />
+                            </div>
+                          ))}
+                        </CardContent>
+                      </Card>
+                    ))}
+
                     <Card className="bg-slate-800/50 border-slate-700">
                       <CardHeader className="border-b border-slate-700">
-                        <CardTitle className="text-white">ميزات الموقع</CardTitle>
+                        <CardTitle className="text-white">القنوات الموصى بها</CardTitle>
                         <CardDescription className="text-slate-400">
-                          فعّل أو عطّل الميزات التجريبية بسرعة.
+                          اختر ما إذا كانت التوصيات تلقائية أو يدوية، وسيتم عرض قناتين فقط أسفل البث.
                         </CardDescription>
                       </CardHeader>
                       <CardContent className="p-6 space-y-4">
-                        {featureFlags.map((flag) => (
-                          <div key={flag.id} className="flex items-center justify-between rounded-lg border border-slate-700 p-4">
-                            <div>
-                              <p className="text-white font-medium">{flag.name}</p>
-                              <p className="text-xs text-slate-400">{flag.description}</p>
+                        <div className="space-y-2">
+                          <Label className="text-slate-300">طريقة الاختيار</Label>
+                          <select
+                            value={streamRecommendations.mode}
+                            onChange={(event) =>
+                              setStreamRecommendations((prev) => ({
+                                ...prev,
+                                mode: event.target.value as StreamRecommendationSettings['mode'],
+                              }))
+                            }
+                            className="w-full bg-slate-800 border border-slate-700 text-white rounded-md p-2"
+                          >
+                            <option value="auto">تلقائي</option>
+                            <option value="manual">يدوي</option>
+                          </select>
+                        </div>
+
+                        {streamRecommendations.mode === 'manual' && (
+                          <div className="space-y-3">
+                            <p className="text-xs text-slate-400">
+                              اختر قناتين كحد أقصى لعرضها في صفحة البث.
+                            </p>
+                            <div className="max-h-64 overflow-y-auto rounded-lg border border-slate-700 bg-slate-900/40 p-3 space-y-2">
+                              {streams.length === 0 ? (
+                                <p className="text-sm text-slate-500">لا توجد قنوات متاحة للاختيار.</p>
+                              ) : (
+                                streams.map((stream) => (
+                                  <label
+                                    key={stream.id}
+                                    className="flex items-center gap-3 rounded-md border border-slate-800 p-2 hover:border-slate-600"
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={streamRecommendations.manualIds.includes(stream.id)}
+                                      onChange={() => toggleManualRecommendation(stream.id)}
+                                      className="h-4 w-4 rounded border-slate-600 bg-slate-700 text-red-600 focus:ring-red-500"
+                                    />
+                                    <div className="flex-1">
+                                      <p className="text-sm text-white">{stream.title}</p>
+                                      <p className="text-xs text-slate-500">{stream.id}</p>
+                                    </div>
+                                  </label>
+                                ))
+                              )}
                             </div>
-                            <Switch
-                              checked={flag.enabled}
-                              onCheckedChange={(checked) =>
-                                setFeatureFlags((prev) =>
-                                  prev.map((item) =>
-                                    item.id === flag.id ? { ...item, enabled: checked } : item
-                                  )
-                                )
-                              }
-                            />
                           </div>
-                        ))}
+                        )}
                       </CardContent>
                     </Card>
                   </div>
@@ -3741,10 +4092,28 @@ export default function AdminDashboard() {
                             />
                           </div>
                           <div className="space-y-2">
+                            <Label className="text-slate-300">أيقونة الموقع (Favicon)</Label>
+                            <Input
+                              value={siteSettings.faviconUrl ?? ''}
+                              onChange={(e) => setSiteSettings({ ...siteSettings, faviconUrl: e.target.value })}
+                              placeholder="https://example.com/favicon.ico"
+                              className="bg-slate-800 border-slate-700 text-white"
+                            />
+                          </div>
+                          <div className="space-y-2">
                             <Label className="text-slate-300">البريد الداعم</Label>
                             <Input
                               value={siteSettings.supportEmail}
                               onChange={(e) => setSiteSettings({ ...siteSettings, supportEmail: e.target.value })}
+                              className="bg-slate-800 border-slate-700 text-white"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label className="text-slate-300">أيقونة الصفحة</Label>
+                            <Input
+                              value={siteSettings.appIconUrl ?? ''}
+                              onChange={(e) => setSiteSettings({ ...siteSettings, appIconUrl: e.target.value })}
+                              placeholder="https://example.com/logo.png"
                               className="bg-slate-800 border-slate-700 text-white"
                             />
                           </div>
@@ -3982,6 +4351,7 @@ export default function AdminDashboard() {
                                 <option value="stream-top">صفحة البث - أعلى</option>
                                 <option value="stream-bottom">صفحة البث - أسفل</option>
                                 <option value="stream-sidebar">صفحة البث - جانبي</option>
+                                <option value="popunder-legal">إعلان Popunder قانوني</option>
                               </select>
                             </div>
                             <div className="space-y-2">

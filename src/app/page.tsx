@@ -392,6 +392,7 @@ export default function Home() {
   const [siteSettings, setSiteSettings] = useState<{
     title?: string;
     faviconUrl?: string;
+    appIconUrl?: string;
     primaryColor?: string;
     fontName?: string;
     fontUrl?: string;
@@ -413,6 +414,11 @@ export default function Home() {
   const [pushEnabled, setPushEnabled] = useState(false);
   const [pushSupported, setPushSupported] = useState(true);
   const [featureFlags, setFeatureFlags] = useState({
+    featuredChannels: true,
+    mainHero: true,
+    mainSearch: true,
+    mainFilters: true,
+    mainAds: true,
     aiRecommendations: true,
     pushNotifications: true,
     engagementAnalytics: true,
@@ -446,6 +452,56 @@ export default function Home() {
         console.error('Failed to parse pinned streams:', error);
       }
     }
+  }, []);
+
+  useEffect(() => {
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === FEATURE_FLAGS_KEY && event.newValue) {
+        try {
+          const parsed = JSON.parse(event.newValue) as Partial<typeof featureFlags>;
+          setFeatureFlags((prev) => ({ ...prev, ...parsed }));
+        } catch (error) {
+          console.error('Failed to parse feature flags:', error);
+        }
+      }
+      if (event.key === 'pinnedStreams' && event.newValue) {
+        try {
+          const parsedPins = JSON.parse(event.newValue) as string[];
+          setPinnedStreams(new Set(parsedPins));
+        } catch (error) {
+          console.error('Failed to parse pinned streams:', error);
+        }
+      }
+    };
+    const handleFeatureFlagsUpdate = (event: Event) => {
+      const customEvent = event as CustomEvent<Partial<typeof featureFlags>>;
+      if (customEvent.detail) {
+        setFeatureFlags((prev) => ({ ...prev, ...customEvent.detail }));
+      }
+    };
+    const handlePinnedUpdate = (event: Event) => {
+      const customEvent = event as CustomEvent<string[]>;
+      if (customEvent.detail) {
+        setPinnedStreams(new Set(customEvent.detail));
+      }
+    };
+    const handleSiteSettingsUpdate = (event: Event) => {
+      const customEvent = event as CustomEvent<typeof siteSettings>;
+      if (customEvent.detail) {
+        setSiteSettings(customEvent.detail);
+        applySiteSettings(customEvent.detail);
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+    window.addEventListener('feature-flags:update', handleFeatureFlagsUpdate);
+    window.addEventListener('pinned-streams:update', handlePinnedUpdate);
+    window.addEventListener('site-settings:update', handleSiteSettingsUpdate);
+    return () => {
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('feature-flags:update', handleFeatureFlagsUpdate);
+      window.removeEventListener('pinned-streams:update', handlePinnedUpdate);
+      window.removeEventListener('site-settings:update', handleSiteSettingsUpdate);
+    };
   }, []);
 
   useEffect(() => {
@@ -557,6 +613,13 @@ export default function Home() {
     }
     if (!featureFlags.aiRecommendations) {
       setShowAiPanel(false);
+    }
+    if (!featureFlags.mainFilters) {
+      setShowFiltersPanel(false);
+      setFilters({ category: 'all', language: 'all', country: 'all' });
+    }
+    if (!featureFlags.mainSearch) {
+      setSearchQuery('');
     }
   }, [featureFlags]);
 
@@ -676,49 +739,19 @@ export default function Home() {
     try {
       const parsed = JSON.parse(storedSettings) as {
         title?: string;
+        siteTitle?: string;
         faviconUrl?: string;
+        appIconUrl?: string;
         primaryColor?: string;
         fontName?: string;
         fontUrl?: string;
       };
-      setSiteSettings(parsed);
-      if (parsed.title) {
-        document.title = parsed.title;
-      }
-      if (parsed.primaryColor) {
-        document.documentElement.style.setProperty('--brand-color', parsed.primaryColor);
-      }
-      if (parsed.fontName) {
-        document.documentElement.style.fontFamily = `${parsed.fontName}, ui-sans-serif, system-ui`;
-      }
-      if (parsed.fontUrl) {
-        const fontStyleId = 'custom-font-style';
-        let styleTag = document.getElementById(fontStyleId) as HTMLStyleElement | null;
-        if (!styleTag) {
-          styleTag = document.createElement('style');
-          styleTag.id = fontStyleId;
-          document.head.appendChild(styleTag);
-        }
-        const fontName = parsed.fontName || 'CustomFont';
-        styleTag.textContent = `
-@font-face {
-  font-family: '${fontName}';
-  src: url('${parsed.fontUrl}');
-  font-display: swap;
-}
-`;
-      }
-      if (parsed.faviconUrl) {
-        const faviconId = 'site-favicon';
-        let link = document.getElementById(faviconId) as HTMLLinkElement | null;
-        if (!link) {
-          link = document.createElement('link');
-          link.id = faviconId;
-          link.rel = 'icon';
-          document.head.appendChild(link);
-        }
-        link.href = parsed.faviconUrl;
-      }
+      const nextSettings = {
+        ...parsed,
+        title: parsed.title ?? parsed.siteTitle,
+      };
+      setSiteSettings(nextSettings);
+      applySiteSettings(nextSettings);
     } catch (error) {
       console.error('Failed to parse site settings:', error);
     }
@@ -871,8 +904,8 @@ export default function Home() {
   });
 
   const sortedStreams = [...filteredStreams].sort((a, b) => {
-    const aPinned = pinnedStreams.has(a.id);
-    const bPinned = pinnedStreams.has(b.id);
+    const aPinned = featureFlags.featuredChannels && pinnedStreams.has(a.id);
+    const bPinned = featureFlags.featuredChannels && pinnedStreams.has(b.id);
     if (aPinned === bPinned) return 0;
     return aPinned ? -1 : 1;
   });
@@ -1211,6 +1244,47 @@ export default function Home() {
     Unknown: 'border-slate-300 text-slate-500 dark:border-slate-600 dark:text-slate-400',
   };
 
+  const applySiteSettings = (nextSettings: typeof siteSettings) => {
+    if (!nextSettings) return;
+    if (nextSettings.title) {
+      document.title = nextSettings.title;
+    }
+    if (nextSettings.primaryColor) {
+      document.documentElement.style.setProperty('--brand-color', nextSettings.primaryColor);
+    }
+    if (nextSettings.fontName) {
+      document.documentElement.style.fontFamily = `${nextSettings.fontName}, ui-sans-serif, system-ui`;
+    }
+    if (nextSettings.fontUrl) {
+      const fontStyleId = 'custom-font-style';
+      let styleTag = document.getElementById(fontStyleId) as HTMLStyleElement | null;
+      if (!styleTag) {
+        styleTag = document.createElement('style');
+        styleTag.id = fontStyleId;
+        document.head.appendChild(styleTag);
+      }
+      const fontName = nextSettings.fontName || 'CustomFont';
+      styleTag.textContent = `
+@font-face {
+  font-family: '${fontName}';
+  src: url('${nextSettings.fontUrl}');
+  font-display: swap;
+}
+`;
+    }
+    if (nextSettings.faviconUrl) {
+      const faviconId = 'site-favicon';
+      let link = document.getElementById(faviconId) as HTMLLinkElement | null;
+      if (!link) {
+        link = document.createElement('link');
+        link.id = faviconId;
+        link.rel = 'icon';
+        document.head.appendChild(link);
+      }
+      link.href = nextSettings.faviconUrl;
+    }
+  };
+
   const continueWatching = recentlyWatched
     .filter((entry) => entry.lastPositionSeconds > 30)
     .sort((a, b) => new Date(b.lastWatchedAt).getTime() - new Date(a.lastWatchedAt).getTime())
@@ -1239,7 +1313,15 @@ export default function Home() {
                 className="rounded-xl p-3"
                 style={{ backgroundColor: siteSettings?.primaryColor ?? '#dc2626' }}
               >
-                <Tv className="h-6 w-6 text-white" />
+                {siteSettings?.appIconUrl ? (
+                  <img
+                    src={siteSettings.appIconUrl}
+                    alt={siteSettings.title ?? labels.title}
+                    className="h-6 w-6 object-contain"
+                  />
+                ) : (
+                  <Tv className="h-6 w-6 text-white" />
+                )}
               </div>
               <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
                 {siteSettings?.title ?? labels.title}
@@ -1539,7 +1621,7 @@ export default function Home() {
           </div>
         )}
         {/* Top Ad Space */}
-        {topAds.length > 0 && (
+        {featureFlags.mainAds && topAds.length > 0 && (
           <div className="mb-8">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {topAds.slice(0, 2).map((ad) => (
@@ -1571,58 +1653,64 @@ export default function Home() {
         )}
 
         {/* Welcome Section */}
-        <div className="text-center mb-8">
-          <h2 className="text-4xl md:text-5xl font-bold mb-4 text-slate-800 dark:text-slate-100">
-            {labels.welcomeTitle}
-          </h2>
-          <p className="text-lg text-slate-600 dark:text-slate-400 max-w-2xl mx-auto">
-            {labels.welcomeBody}
-          </p>
-        </div>
+        {featureFlags.mainHero && (
+          <div className="text-center mb-8">
+            <h2 className="text-4xl md:text-5xl font-bold mb-4 text-slate-800 dark:text-slate-100">
+              {labels.welcomeTitle}
+            </h2>
+            <p className="text-lg text-slate-600 dark:text-slate-400 max-w-2xl mx-auto">
+              {labels.welcomeBody}
+            </p>
+          </div>
+        )}
 
         {/* Search Bar */}
-        <div className="mb-4 flex flex-col items-center gap-3">
-          <div className="relative w-full max-w-2xl">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder={labels.searchPlaceholder}
-              className="w-full pl-12 pr-24 py-3 text-lg border-2 border-slate-300 rounded-xl focus:border-red-500 focus:ring-2 focus:ring-red-200 transition-all bg-white dark:bg-slate-800 dark:border-slate-700 dark:text-white"
-            />
-            <div className="absolute right-3 top-1/2 flex -translate-y-1/2 items-center gap-2">
-              {featureFlags.aiRecommendations && (
-                <button
-                  type="button"
-                  onClick={() => setShowAiPanel((prev) => !prev)}
-                  className={`rounded-full border p-2 text-slate-500 transition ${
-                    showAiPanel
-                      ? 'border-indigo-400 bg-indigo-50 text-indigo-600'
-                      : 'border-slate-200 hover:border-red-400 dark:border-slate-700 dark:text-slate-300'
-                  }`}
-                  aria-label={labels.aiRecommendationsTitle}
-                >
-                  <Bot className="h-4 w-4" />
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => setShowFiltersPanel((prev) => !prev)}
-                className={`rounded-full border p-2 text-slate-500 transition ${
-                  showFiltersPanel
-                    ? 'border-red-400 bg-red-50 text-red-600'
-                    : 'border-slate-200 hover:border-red-400 dark:border-slate-700 dark:text-slate-300'
-                }`}
-                aria-label={labels.filtersTitle}
-              >
-                <SlidersHorizontal className="h-4 w-4" />
-              </button>
+        {featureFlags.mainSearch && (
+          <div className="mb-4 flex flex-col items-center gap-3">
+            <div className="relative w-full max-w-2xl">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={labels.searchPlaceholder}
+                className="w-full pl-12 pr-24 py-3 text-lg border-2 border-slate-300 rounded-xl focus:border-red-500 focus:ring-2 focus:ring-red-200 transition-all bg-white dark:bg-slate-800 dark:border-slate-700 dark:text-white"
+              />
+              <div className="absolute right-3 top-1/2 flex -translate-y-1/2 items-center gap-2">
+                {featureFlags.aiRecommendations && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAiPanel((prev) => !prev)}
+                    className={`rounded-full border p-2 text-slate-500 transition ${
+                      showAiPanel
+                        ? 'border-indigo-400 bg-indigo-50 text-indigo-600'
+                        : 'border-slate-200 hover:border-red-400 dark:border-slate-700 dark:text-slate-300'
+                    }`}
+                    aria-label={labels.aiRecommendationsTitle}
+                  >
+                    <Bot className="h-4 w-4" />
+                  </button>
+                )}
+                {featureFlags.mainFilters && (
+                  <button
+                    type="button"
+                    onClick={() => setShowFiltersPanel((prev) => !prev)}
+                    className={`rounded-full border p-2 text-slate-500 transition ${
+                      showFiltersPanel
+                        ? 'border-red-400 bg-red-50 text-red-600'
+                        : 'border-slate-200 hover:border-red-400 dark:border-slate-700 dark:text-slate-300'
+                    }`}
+                    aria-label={labels.filtersTitle}
+                  >
+                    <SlidersHorizontal className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
-        {showFiltersPanel && (
+        {showFiltersPanel && featureFlags.mainFilters && (
           <div className="mb-8 space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <div className="flex flex-wrap items-center gap-2">
               {CATEGORY_OPTIONS.filter((option) => option !== 'all').map((option) => (
@@ -2095,7 +2183,7 @@ export default function Home() {
                 >
                   <Card className="overflow-hidden hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 border-2 hover:border-red-500">
                     <div className="relative aspect-video bg-slate-200 dark:bg-slate-800">
-                      {pinnedStreams.has(stream.id) && (
+                      {featureFlags.featuredChannels && pinnedStreams.has(stream.id) && (
                         <div className="absolute left-2 top-2 z-10 inline-flex items-center gap-1 rounded-full bg-yellow-500/90 px-2 py-1 text-xs font-semibold text-white shadow">
                           <Pin className="h-3 w-3" />
                           مميزة
@@ -2335,7 +2423,7 @@ export default function Home() {
         )}
 
         {/* Bottom Ad Space */}
-        {bottomAds.length > 0 && (
+        {featureFlags.mainAds && bottomAds.length > 0 && (
           <div className="mt-12">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {bottomAds.slice(0, 3).map((ad) => (
