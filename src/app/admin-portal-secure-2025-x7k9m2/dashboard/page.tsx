@@ -979,35 +979,6 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleCreateCategory = () => {
-    if (!categoryName.trim()) {
-      toast.error('أدخل اسم التصنيف');
-      return;
-    }
-    const newCategory: Category = {
-      id:
-        typeof crypto !== 'undefined' && 'randomUUID' in crypto
-          ? crypto.randomUUID()
-          : `category-${Date.now()}`,
-      name: categoryName.trim(),
-      parentId: categoryParentId || undefined,
-    };
-    setCategories((prev) => [newCategory, ...prev]);
-    setCategoryName('');
-    setCategoryParentId('');
-    toast.success('تم إضافة التصنيف');
-  };
-
-  const handleDeleteCategory = (categoryId: string) => {
-    setCategories((prev) => prev.filter((category) => category.id !== categoryId));
-    setStreams((prev) =>
-      prev.map((stream) =>
-        stream.categoryId === categoryId ? { ...stream, categoryId: null } : stream
-      )
-    );
-    toast.success('تم حذف التصنيف');
-  };
-
   const handleCategoryDrop = async (
     event: DragEvent<HTMLDivElement>,
     categoryId?: string
@@ -1388,71 +1359,6 @@ export default function AdminDashboard() {
       toast.error('فشل في قراءة ملف القنوات');
     } finally {
       setLoadingChannels(false);
-    }
-  };
-
-  const handleCreateCategory = () => {
-    if (!categoryName.trim()) {
-      toast.error('أدخل اسم التصنيف');
-      return;
-    }
-    const newCategory: Category = {
-      id:
-        typeof crypto !== 'undefined' && 'randomUUID' in crypto
-          ? crypto.randomUUID()
-          : `category-${Date.now()}`,
-      name: categoryName.trim(),
-      parentId: categoryParentId || undefined,
-    };
-    setCategories((prev) => [newCategory, ...prev]);
-    setCategoryName('');
-    setCategoryParentId('');
-    toast.success('تم إضافة التصنيف');
-  };
-
-  const handleDeleteCategory = (categoryId: string) => {
-    setCategories((prev) => prev.filter((category) => category.id !== categoryId));
-    setStreams((prev) =>
-      prev.map((stream) =>
-        stream.categoryId === categoryId ? { ...stream, categoryId: null } : stream
-      )
-    );
-    toast.success('تم حذف التصنيف');
-  };
-
-  const handleMergeDuplicates = async (primaryId: string, duplicateIds: string[]) => {
-    if (duplicateIds.length === 0) return;
-    setDuplicateProcessing(true);
-    try {
-      const primaryStream = streams.find((stream) => stream.id === primaryId);
-      let priorityBase = primaryStream?.servers.length ?? 0;
-      const duplicates = streams.filter((stream) => duplicateIds.includes(stream.id));
-      const serverCreates = duplicates.flatMap((stream) =>
-        stream.servers.map((server) => ({
-          streamId: primaryId,
-          name: server.name || `الخادم ${priorityBase + 1}`,
-          url: server.url,
-          priority: priorityBase++,
-        }))
-      );
-      await Promise.all(
-        serverCreates.map((server) =>
-          fetch('/api/servers', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(server),
-          })
-        )
-      );
-      await Promise.all(
-        duplicateIds.map((id) => fetch(`/api/streams/${id}`, { method: 'DELETE' }))
-      );
-      toast.success('تم دمج التكرارات');
-      await fetchData();
-    } catch (error) {
-      toast.error('فشل دمج التكرارات');
-    } finally {
-      setDuplicateProcessing(false);
     }
   };
 
