@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import Link from 'next/link';
 import { Play, Tv, ArrowRight, Home, Server, Zap, AlertCircle, Info } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -38,6 +38,21 @@ interface StreamData {
   ads: Ad[];
 }
 
+interface StreamSummary {
+  id: string;
+  title: string;
+  description: string | null;
+  thumbnail: string | null;
+}
+
+interface StreamRecommendationSettings {
+  mode: 'auto' | 'manual';
+  manualIds: string[];
+}
+
+const FEATURE_FLAGS_KEY = 'websiteFeatureFlags';
+const STREAM_RECOMMENDATIONS_KEY = 'streamRecommendations';
+
 export default function StreamPage({ params }: { params: { id: string } }) {
   const [stream, setStream] = useState<StreamData | null>(null);
   const [selectedServer, setSelectedServer] = useState<Server | null>(null);
@@ -45,6 +60,19 @@ export default function StreamPage({ params }: { params: { id: string } }) {
   const [error, setError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
+  const [featureFlags, setFeatureFlags] = useState({
+    streamRecommended: true,
+    streamDescription: true,
+    streamAdsTop: true,
+    streamAdsBottom: true,
+    streamAdsSidebar: true,
+    streamServerSwitcher: true,
+  });
+  const [recommendationSettings, setRecommendationSettings] = useState<StreamRecommendationSettings>({
+    mode: 'auto',
+    manualIds: [],
+  });
+  const [allStreams, setAllStreams] = useState<StreamSummary[]>([]);
 
   useEffect(() => {
     fetchStream();
@@ -67,6 +95,51 @@ export default function StreamPage({ params }: { params: { id: string } }) {
       }
     };
   }, [selectedServer]);
+
+  useEffect(() => {
+    const storedFlags = localStorage.getItem(FEATURE_FLAGS_KEY);
+    if (storedFlags) {
+      try {
+        const parsed = JSON.parse(storedFlags) as Partial<typeof featureFlags>;
+        setFeatureFlags((prev) => ({ ...prev, ...parsed }));
+      } catch (error) {
+        console.error('Failed to parse feature flags:', error);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    const storedRecommendations = localStorage.getItem(STREAM_RECOMMENDATIONS_KEY);
+    if (storedRecommendations) {
+      try {
+        const parsed = JSON.parse(storedRecommendations) as StreamRecommendationSettings;
+        if (parsed.mode === 'manual' || parsed.mode === 'auto') {
+          setRecommendationSettings({
+            mode: parsed.mode,
+            manualIds: Array.isArray(parsed.manualIds) ? parsed.manualIds : [],
+          });
+        }
+      } catch (error) {
+        console.error('Failed to parse stream recommendations:', error);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!featureFlags.streamRecommended) return;
+    const fetchStreams = async () => {
+      try {
+        const response = await fetch('/api/streams?published=true');
+        const data = await response.json();
+        if (Array.isArray(data)) {
+          setAllStreams(data);
+        }
+      } catch (error) {
+        console.error('Error fetching streams for recommendations:', error);
+      }
+    };
+    fetchStreams();
+  }, [featureFlags.streamRecommended]);
 
   const fetchStream = async () => {
     try {
@@ -174,6 +247,20 @@ export default function StreamPage({ params }: { params: { id: string } }) {
   const bottomAds = stream.ads.filter((ad) => ad.position === 'stream-bottom');
   const sidebarAds = stream.ads.filter((ad) => ad.position === 'stream-sidebar');
 
+  const recommendedStreams = useMemo(() => {
+    if (!featureFlags.streamRecommended) return [];
+    const pool = allStreams.filter((item) => item.id !== stream.id);
+    if (recommendationSettings.mode === 'manual' && recommendationSettings.manualIds.length > 0) {
+      const manualList = recommendationSettings.manualIds
+        .map((id) => pool.find((item) => item.id === id))
+        .filter((item): item is StreamSummary => Boolean(item));
+      if (manualList.length > 0) {
+        return manualList.slice(0, 2);
+      }
+    }
+    return pool.slice(0, 2);
+  }, [allStreams, featureFlags.streamRecommended, recommendationSettings, stream.id]);
+
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-b from-slate-50 to-white dark:from-slate-950 dark:to-slate-900" dir="rtl">
       {/* Header */}
@@ -199,7 +286,7 @@ export default function StreamPage({ params }: { params: { id: string } }) {
       {/* Main Content */}
       <main className="flex-1 container mx-auto px-4 py-8">
         {/* Top Ads */}
-        {topAds.length > 0 && (
+        {featureFlags.streamAdsTop && topAds.length > 0 && (
           <div className="mb-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {topAds.map((ad) => (
@@ -248,7 +335,7 @@ export default function StreamPage({ params }: { params: { id: string } }) {
               </CardHeader>
               <CardContent>
                 {/* Server Selector */}
-                {stream.servers.length > 1 && (
+                {featureFlags.streamServerSwitcher && stream.servers.length > 1 && (
                   <div className="mb-4 flex items-center gap-3">
                     <Server className="h-5 w-5 text-slate-600 dark:text-slate-400" />
                     <Select
@@ -332,7 +419,7 @@ export default function StreamPage({ params }: { params: { id: string } }) {
             </Card>
 
             {/* Description Card - More Prominent for SEO */}
-            {stream.description && (
+            {featureFlags.streamDescription && stream.description && (
               <Card className="mt-6 border-2 border-blue-200 dark:border-blue-900">
                 <CardHeader>
                   <div className="flex items-center gap-2">
@@ -355,8 +442,56 @@ export default function StreamPage({ params }: { params: { id: string } }) {
               </Card>
             )}
 
+            {featureFlags.streamRecommended && (
+              <Card className="mt-6 border-slate-200 dark:border-slate-800">
+                <CardHeader>
+                  <CardTitle className="text-lg">قنوات موصى بها</CardTitle>
+                  <CardDescription>
+                    {recommendationSettings.mode === 'manual'
+                      ? 'يتم عرض القنوات المحددة يدوياً من لوحة التحكم.'
+                      : 'اقتراح تلقائي بناءً على القنوات المتاحة.'}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {recommendedStreams.length === 0 ? (
+                    <p className="text-sm text-slate-500 dark:text-slate-400">
+                      لا توجد توصيات متاحة حالياً.
+                    </p>
+                  ) : (
+                    <div className="grid gap-4 md:grid-cols-2">
+                      {recommendedStreams.map((item) => (
+                        <Link
+                          key={item.id}
+                          href={`/stream/${item.id}`}
+                          className="flex items-center gap-3 rounded-lg border border-slate-200 p-3 hover:border-red-400 dark:border-slate-800"
+                        >
+                          {item.thumbnail ? (
+                            <img
+                              src={item.thumbnail}
+                              alt={item.title}
+                              className="h-16 w-24 rounded-md object-cover"
+                            />
+                          ) : (
+                            <div className="h-16 w-24 rounded-md bg-slate-100 dark:bg-slate-800" />
+                          )}
+                          <div>
+                            <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 line-clamp-1">
+                              {item.title}
+                            </p>
+                            <p className="text-xs text-slate-500 line-clamp-2">
+                              {item.description ?? '—'}
+                            </p>
+                          </div>
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
             {/* Bottom Ads */}
-            {bottomAds.length > 0 && (
+            {featureFlags.streamAdsBottom && bottomAds.length > 0 && (
               <div className="mt-6">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   {bottomAds.map((ad) => (
@@ -397,44 +532,46 @@ export default function StreamPage({ params }: { params: { id: string } }) {
 
           {/* Sidebar */}
           <div className="lg:col-span-1">
-            <Card className="sticky top-24">
-              <CardHeader>
-                <CardTitle>إعلانات</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {sidebarAds.length > 0 ? (
-                  sidebarAds.map((ad) => (
-                    ad.linkUrl ? (
-                      <a
-                        key={ad.id}
-                        href={ad.linkUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="block"
-                      >
+            {featureFlags.streamAdsSidebar && (
+              <Card className="sticky top-24">
+                <CardHeader>
+                  <CardTitle>إعلانات</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {sidebarAds.length > 0 ? (
+                    sidebarAds.map((ad) => (
+                      ad.linkUrl ? (
+                        <a
+                          key={ad.id}
+                          href={ad.linkUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block"
+                        >
+                          <img
+                            src={ad.imageUrl}
+                            alt={ad.title || 'إعلان'}
+                            className="w-full h-48 object-cover rounded-lg hover:opacity-80 transition-opacity"
+                          />
+                        </a>
+                      ) : (
                         <img
+                          key={ad.id}
                           src={ad.imageUrl}
                           alt={ad.title || 'إعلان'}
-                          className="w-full h-48 object-cover rounded-lg hover:opacity-80 transition-opacity"
+                          className="w-full h-48 object-cover rounded-lg"
                         />
-                      </a>
-                    ) : (
-                      <img
-                        key={ad.id}
-                        src={ad.imageUrl}
-                        alt={ad.title || 'إعلان'}
-                        className="w-full h-48 object-cover rounded-lg"
-                      />
-                    )
-                  ))
-                ) : (
-                  <div className="text-center py-8 text-slate-400">
-                    <Tv className="h-12 w-12 mx-auto mb-2" />
-                    <p className="text-sm">لا توجد إعلانات</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                      )
+                    ))
+                  ) : (
+                    <div className="text-center py-8 text-slate-400">
+                      <Tv className="h-12 w-12 mx-auto mb-2" />
+                      <p className="text-sm">لا توجد إعلانات</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
           </div>
         </div>
       </main>
