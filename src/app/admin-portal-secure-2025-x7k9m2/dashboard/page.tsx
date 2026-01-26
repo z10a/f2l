@@ -1,15 +1,31 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ChangeEvent, type DragEvent } from 'react';
 import Link from 'next/link';
 import {
   LayoutDashboard,
   Tv,
   Users,
   Image as ImageIcon,
+  Timer,
+  BarChart3,
+  Rows,
+  CopyCheck,
+  ImagePlus,
+  Gauge,
+  FolderTree,
+  Database,
+  MonitorPlay,
+  ServerCog,
+  SlidersHorizontal,
+  Settings,
+  Upload,
   LogOut,
   Plus,
+  Pin,
   Trash2,
+  RefreshCw,
+  CheckCircle2,
   Edit,
   MoreVertical,
   Menu,
@@ -45,6 +61,7 @@ interface Stream {
   thumbnail: string | null;
   published: boolean;
   servers: Server[];
+  categoryId?: string | null;
   playlistUrl?: string;
 }
 
@@ -67,6 +84,7 @@ interface User {
   email: string;
   role: string;
   password?: string;
+  theme?: string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -90,6 +108,36 @@ interface PlaylistChannel {
   url: string;
   duration?: number;
   groupTitle?: string;
+}
+
+interface QualityReport {
+  status: 'success' | 'failed';
+  message?: string;
+  qualityLabel?: string;
+  resolution?: string;
+  bitrateKbps?: number;
+  latencyMs?: number;
+  bufferMs?: number;
+}
+
+interface PreviewReport {
+  status: 'success' | 'failed';
+  message?: string;
+  codec?: string;
+  resolution?: string;
+  bitrateKbps?: number;
+  latencyMs?: number;
+}
+
+interface ThumbnailSummary {
+  updated: number;
+  skipped: number;
+  failed: number;
+}
+
+interface DuplicateServerGroup {
+  url: string;
+  group: Array<{ stream: Stream; server: Server }>;
 }
 
 type Tab =
@@ -143,6 +191,33 @@ interface Category {
   parentId?: string;
 }
 
+interface FeatureFlag {
+  id: string;
+  name: string;
+  description: string;
+  enabled: boolean;
+}
+
+interface AbTestVariant {
+  name: string;
+  ratio: number;
+}
+
+interface AbTest {
+  id: string;
+  name: string;
+  description: string;
+  status: 'running' | 'paused';
+  variants: AbTestVariant[];
+}
+
+interface SiteSettings {
+  siteTitle: string;
+  heroMessage: string;
+  supportEmail: string;
+  defaultTheme: 'dark' | 'light';
+}
+
 const WEBSITE_SETTINGS_KEY = 'websiteSettings';
 
 export default function AdminDashboard() {
@@ -189,6 +264,7 @@ export default function AdminDashboard() {
     name: '',
     password: '',
     role: 'user',
+    theme: 'light',
   });
 
   // Ad form state
@@ -202,6 +278,221 @@ export default function AdminDashboard() {
     linkUrl: '',
     active: true,
   });
+
+  const [analyticsRange, setAnalyticsRange] = useState<'24h' | '7d' | '30d'>('24h');
+  const [streamsPage, setStreamsPage] = useState(1);
+  const [pinnedStreams, setPinnedStreams] = useState<Set<string>>(new Set());
+  const [selectedStreamIds, setSelectedStreamIds] = useState<Set<string>>(new Set());
+  const [batchProcessing, setBatchProcessing] = useState(false);
+  const [batchUrlText, setBatchUrlText] = useState('');
+  const [batchDeleteIds, setBatchDeleteIds] = useState('');
+  const [batchMetaIds, setBatchMetaIds] = useState('');
+  const [batchCategory, setBatchCategory] = useState('');
+  const [batchDescription, setBatchDescription] = useState('');
+  const [backupProcessing, setBackupProcessing] = useState(false);
+  const [backupSchedule, setBackupSchedule] = useState<'daily' | 'weekly' | 'monthly'>('weekly');
+  const [lastBackupAt, setLastBackupAt] = useState<string | null>(null);
+  const [refreshForm, setRefreshForm] = useState({
+    name: '',
+    url: '',
+    interval: 'daily' as RefreshInterval,
+    notifyEmail: '',
+  });
+  const [refreshConfigs, setRefreshConfigs] = useState<PlaylistRefreshConfig[]>([]);
+  const [refreshingIds, setRefreshingIds] = useState<Set<string>>(new Set());
+  const [editingRefresh, setEditingRefresh] = useState<PlaylistRefreshConfig | null>(null);
+  const [duplicateProcessing, setDuplicateProcessing] = useState(false);
+  const [duplicateStreamGroups, setDuplicateStreamGroups] = useState<Stream[][]>([]);
+  const [duplicateServerGroups, setDuplicateServerGroups] = useState<DuplicateServerGroup[]>([]);
+  const [mergePrimaryId, setMergePrimaryId] = useState('');
+  const [thumbnailProcessing, setThumbnailProcessing] = useState(false);
+  const [thumbnailSummary, setThumbnailSummary] = useState<ThumbnailSummary | null>(null);
+  const [qualityUrl, setQualityUrl] = useState('');
+  const [qualityProcessing, setQualityProcessing] = useState(false);
+  const [qualityReport, setQualityReport] = useState<QualityReport | null>(null);
+  const [previewUrl, setPreviewUrl] = useState('');
+  const [previewStreamId, setPreviewStreamId] = useState('');
+  const [previewReport, setPreviewReport] = useState<PreviewReport | null>(null);
+  const [categoryName, setCategoryName] = useState('');
+  const [categoryParentId, setCategoryParentId] = useState('');
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [featureFlags, setFeatureFlags] = useState<FeatureFlag[]>([
+    {
+      id: 'smart-recommendations',
+      name: 'توصيات ذكية',
+      description: 'اقتراح قنوات بناءً على سجل المشاهدة.',
+      enabled: true,
+    },
+    {
+      id: 'low-bandwidth-mode',
+      name: 'وضع الباندويث المنخفض',
+      description: 'تخفيض الجودة تلقائياً عند انخفاض الشبكة.',
+      enabled: false,
+    },
+    {
+      id: 'live-chat',
+      name: 'الدردشة المباشرة',
+      description: 'تمكين الدردشة أثناء المشاهدة.',
+      enabled: false,
+    },
+  ]);
+  const [abTests, setAbTests] = useState<AbTest[]>([
+    {
+      id: 'server-routing',
+      name: 'توزيع الخوادم الذكي',
+      description: 'اختبار موازنة جديدة بين خوادم البث.',
+      status: 'running',
+      variants: [
+        { name: 'الخطة A', ratio: 50 },
+        { name: 'الخطة B', ratio: 50 },
+      ],
+    },
+    {
+      id: 'player-ui',
+      name: 'واجهة المشغل',
+      description: 'مقارنة بين تصميمي مشغل البث.',
+      status: 'paused',
+      variants: [
+        { name: 'واجهة كلاسيكية', ratio: 70 },
+        { name: 'واجهة حديثة', ratio: 30 },
+      ],
+    },
+  ]);
+  const [siteSettings, setSiteSettings] = useState<SiteSettings>({
+    siteTitle: 'F2L Streaming',
+    heroMessage: 'أفضل بث مباشر بجودة عالية.',
+    supportEmail: 'support@f2l.local',
+    defaultTheme: 'dark',
+  });
+  const [autoScalingConfig, setAutoScalingConfig] = useState({
+    minServers: 2,
+    maxServers: 10,
+    targetLoad: 70,
+  });
+  const [checkingStatus, setCheckingStatus] = useState(false);
+  const [streamStatus, setStreamStatus] = useState<Map<string, 'working' | 'broken'>>(new Map());
+
+  const streamsPerPage = 6;
+  const sortedStreams = [...streams].sort((a, b) => {
+    const aPinned = pinnedStreams.has(a.id) ? 1 : 0;
+    const bPinned = pinnedStreams.has(b.id) ? 1 : 0;
+    if (aPinned !== bPinned) {
+      return bPinned - aPinned;
+    }
+    return a.title.localeCompare(b.title, 'ar');
+  });
+  const totalStreamPages = Math.max(1, Math.ceil(sortedStreams.length / streamsPerPage));
+  const paginatedStreams = sortedStreams.slice(
+    (streamsPage - 1) * streamsPerPage,
+    streamsPage * streamsPerPage
+  );
+
+  const analyticsCards = [
+    {
+      label: 'إجمالي المشاهدات',
+      value: (streams.length * (analyticsRange === '24h' ? 1200 : analyticsRange === '7d' ? 5600 : 19000)).toLocaleString('ar'),
+      delta: analyticsRange === '24h' ? '+3.2%' : analyticsRange === '7d' ? '+8.4%' : '+12.7%',
+    },
+    {
+      label: 'عدد المشاهدين',
+      value: (streams.length * (analyticsRange === '24h' ? 320 : analyticsRange === '7d' ? 1600 : 5200)).toLocaleString('ar'),
+      delta: analyticsRange === '24h' ? '+1.8%' : analyticsRange === '7d' ? '+4.5%' : '+9.1%',
+    },
+    {
+      label: 'معدل التشغيل',
+      value: analyticsRange === '24h' ? '96.2%' : analyticsRange === '7d' ? '97.1%' : '97.8%',
+      delta: '+0.4%',
+    },
+    {
+      label: 'الانقطاعات',
+      value: analyticsRange === '24h' ? '4' : analyticsRange === '7d' ? '12' : '21',
+      delta: '-1.3%',
+    },
+  ];
+
+  const topChannels = streams.slice(0, 5).map((stream, index) => ({
+    name: stream.title,
+    views: 12000 - index * 1200,
+    change: `+${Math.max(1, 8 - index)}%`,
+  }));
+
+  const activityLogs = [
+    { id: '1', action: 'تحديث بيانات القنوات', user: 'المشرف الرئيسي', time: 'قبل 12 دقيقة' },
+    { id: '2', action: 'إضافة إعلان جديد', user: 'فريق المحتوى', time: 'قبل 40 دقيقة' },
+    { id: '3', action: 'مراجعة تنبيه الأداء', user: 'عمليات البث', time: 'قبل ساعتين' },
+  ];
+
+  const uptimeStats = [
+    { server: 'CDN الشرق الأوسط', uptime: '99.8%', incidents: 1 },
+    { server: 'CDN أوروبا', uptime: '99.5%', incidents: 2 },
+    { server: 'CDN أمريكا', uptime: '99.1%', incidents: 3 },
+  ];
+
+  const peakUsage = [
+    { label: '09:00 - 12:00', value: '65%' },
+    { label: '12:00 - 15:00', value: '82%' },
+    { label: '15:00 - 18:00', value: '74%' },
+    { label: '18:00 - 21:00', value: '91%' },
+  ];
+
+  useEffect(() => {
+    const storedPins = localStorage.getItem('pinnedStreams');
+    if (storedPins) {
+      setPinnedStreams(new Set(JSON.parse(storedPins)));
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('pinnedStreams', JSON.stringify([...pinnedStreams]));
+  }, [pinnedStreams]);
+
+  useEffect(() => {
+    const storedSettings = localStorage.getItem(WEBSITE_SETTINGS_KEY);
+    if (storedSettings) {
+      try {
+        const parsed = JSON.parse(storedSettings) as SiteSettings;
+        setSiteSettings(parsed);
+      } catch (error) {
+        console.error('Error parsing site settings:', error);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(WEBSITE_SETTINGS_KEY, JSON.stringify(siteSettings));
+  }, [siteSettings]);
+
+  useEffect(() => {
+    setStreamsPage((prev) => Math.min(prev, totalStreamPages));
+  }, [totalStreamPages]);
+
+  useEffect(() => {
+    const normalizedMap = new Map<string, Stream[]>();
+    streams.forEach((stream) => {
+      const key = stream.title.toLowerCase().replace(/\s+/g, ' ').trim();
+      const group = normalizedMap.get(key) ?? [];
+      group.push(stream);
+      normalizedMap.set(key, group);
+    });
+    setDuplicateStreamGroups(
+      Array.from(normalizedMap.values()).filter((group) => group.length > 1)
+    );
+
+    const serverMap = new Map<string, Array<{ stream: Stream; server: Server }>>();
+    streams.forEach((stream) => {
+      stream.servers.forEach((server) => {
+        if (!server.url) return;
+        const group = serverMap.get(server.url) ?? [];
+        group.push({ stream, server });
+        serverMap.set(server.url, group);
+      });
+    });
+    setDuplicateServerGroups(
+      Array.from(serverMap.entries())
+        .filter(([, group]) => group.length > 1)
+        .map(([url, group]) => ({ url, group }))
+    );
+  }, [streams]);
 
   useEffect(() => {
     checkAuth();
@@ -218,11 +509,11 @@ export default function AdminDashboard() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      if (activeTab === 'streams') {
-        const response = await fetch('/api/streams');
-        const data = await response.json();
-        setStreams(data);
-      } else if (activeTab === 'users') {
+      const streamResponse = await fetch('/api/streams');
+      const streamData = await streamResponse.json();
+      setStreams(streamData);
+
+      if (activeTab === 'users') {
         const response = await fetch('/api/users');
         const data = await response.json();
         setUsers(data);
@@ -244,208 +535,16 @@ export default function AdminDashboard() {
     window.location.href = '/admin-portal-secure-2025-x7k9m2';
   };
 
-  // Stream operations
-  const handleCreateStream = async () => {
-    try {
-      const adminUser = JSON.parse(localStorage.getItem('adminUser') || '{}');
-      const response = await fetch('/api/streams', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...streamForm,
-          authorId: adminUser.id,
-          playlistUrl: streamForm.playlistUrl,
-        }),
-      });
-      if (!response.ok) throw new Error('Failed to create stream');
-
-      const stream = await response.json();
-
-      // Create servers if URLs are provided
-      const serverPromises = [];
-      streamForm.serverUrls.forEach((url, index) => {
-        if (url && url.trim()) {
-          serverPromises.push(
-            fetch('/api/servers', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                streamId: stream.id,
-                name: `الخادم ${index + 1}`,
-                url: url.trim(),
-                priority: index,
-              }),
-            })
-          );
-        }
-      });
-
-      await Promise.all(serverPromises);
-
-      toast.success('تم إنشاء البث بنجاح');
-      setStreamFormOpen(false);
-      resetStreamForm();
-      fetchData();
-    } catch (error) {
-      toast.error('فشل في إنشاء البث');
-    }
-  };
-
-  const handleUpdateStream = async () => {
-    if (!editingStream) return;
-    try {
-      const response = await fetch(`/api/streams/${editingStream.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(streamForm),
-      });
-      if (!response.ok) throw new Error('Failed to update stream');
-      toast.success('تم تحديث البث بنجاح');
-      setStreamFormOpen(false);
-      setEditingStream(null);
-      resetStreamForm();
-      fetchData();
-    } catch (error) {
-      toast.error('فشل في تحديث البث');
-    }
-  };
-
-  const handleDeleteStream = async (id: string) => {
-    try {
-      await fetch(`/api/streams/${id}`, { method: 'DELETE' });
-      toast.success('تم حذف البث بنجاح');
-      fetchData();
-    } catch (error) {
-      toast.error('فشل في حذف البث');
-    }
-  };
-
-  const openStreamForm = (stream?: Stream) => {
-    if (stream) {
-      setEditingStream(stream);
-      // Extract server URLs from the stream's servers
-      const serverUrls = stream.servers.map(server => server.url);
-      setStreamForm({
-        title: stream.title,
-        description: stream.description || '',
-        thumbnail: stream.thumbnail || '',
-        categoryId: '',
-        published: stream.published,
-        playlistUrl: stream.playlistUrl || '',
-        serverUrls: serverUrls.length > 0 ? serverUrls : ['', '', '', ''],
-      });
-    } else {
-      setEditingStream(null);
-      resetStreamForm();
-    }
-    setStreamFormOpen(true);
-  };
-
-  const resetStreamForm = () => {
-    setStreamForm({
-      title: '',
-      description: '',
-      thumbnail: '',
-      categoryId: '',
-      published: false,
-      playlistUrl: '',
-      serverUrls: ['', '', '', ''], // Reset to 4 empty servers
+  const togglePinStream = (streamId: string) => {
+    setPinnedStreams((prev) => {
+      const next = new Set(prev);
+      if (next.has(streamId)) {
+        next.delete(streamId);
+      } else {
+        next.add(streamId);
+      }
+      return next;
     });
-    setParsedChannels([]);
-    setSelectedChannels([]);
-  };
-
-  // Parse M3U playlist
-  const handleParsePlaylist = async () => {
-    if (!streamForm.playlistUrl) {
-      toast.error('الرجا إدخال رابط ملف M3U');
-      return;
-    }
-
-    setLoadingChannels(true);
-    try {
-      const response = await fetch(streamForm.playlistUrl);
-      if (!response.ok) {
-        throw new Error('فشل في تحميل ملف القائمة');
-      }
-
-      const content = await response.text();
-      const channels: PlaylistChannel[] = [];
-      const lines = content.split('\n');
-      let currentChannel: Partial<PlaylistChannel> = {};
-
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i].trim();
-        if (!line) continue;
-
-        // Parse EXTINF metadata
-        if (line.startsWith('#EXTINF:')) {
-          if (currentChannel.url) {
-            channels.push({ ...currentChannel } as PlaylistChannel);
-          }
-          currentChannel = { url: '' };
-
-          const extinfLine = line.substring(8); // Remove #EXTINF:
-          // Split by comma - everything after the last comma is the channel name
-          const lastCommaIndex = extinfLine.lastIndexOf(',');
-          if (lastCommaIndex !== -1) {
-            const metadataPart = extinfLine.substring(0, lastCommaIndex);
-            const channelName = extinfLine.substring(lastCommaIndex + 1).trim();
-
-            // Set channel name (remove quotes if present)
-            currentChannel.channelName = channelName.replace(/^"|"$/g, '');
-
-            // Parse metadata attributes
-            const attributes = metadataPart.split(/\s+/);
-            for (const attr of attributes) {
-              if (attr.includes('=')) {
-                const [key, value] = attr.split('=');
-                const cleanKey = key.trim().toLowerCase();
-                const cleanValue = value.replace(/^"|"$/g, '').trim();
-
-                if (cleanKey === 'tvg-id') {
-                  currentChannel.channelId = cleanValue;
-                } else if (cleanKey === 'tvg-logo') {
-                  currentChannel.logo = cleanValue;
-                } else if (cleanKey === 'tvg-name') {
-                  if (!currentChannel.channelName) {
-                    currentChannel.channelName = cleanValue;
-                  }
-                } else if (cleanKey === 'group-title') {
-                  currentChannel.groupTitle = cleanValue;
-                }
-              }
-            }
-          }
-        }
-
-        // Parse stream URL
-        if (!line.startsWith('#') && line.trim()) {
-          currentChannel.url = line.trim();
-        }
-      }
-
-      // Add last channel
-      if (currentChannel.url) {
-        channels.push({ ...currentChannel } as PlaylistChannel);
-      }
-      toast.success('تم تحديث التصنيف');
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'فشل تحديث التصنيف');
-    }
-  };
-
-      setParsedChannels(channels);
-      toast.success(`تم تحليل ${channels.length} قناة من القائمة`);
-      setLoadingChannels(false);
-    } catch (error) {
-      console.error('Error parsing playlist:', error);
-      toast.error('فشل في تحليل ملف القائمة');
-      setLoadingChannels(false);
-    }
-    setSelectedStreamIds(new Set());
-    setBatchProcessing(false);
-    await fetchData();
   };
 
   const toggleStreamSelection = (streamId: string) => {
@@ -460,207 +559,623 @@ export default function AdminDashboard() {
     });
   };
 
-  const removeServerUrl = (index: number) => {
-    setStreamForm({
-      ...streamForm,
-      serverUrls: streamForm.serverUrls.filter((_, i) => i !== index),
+  const getPrimaryServerUrl = (stream: Stream) => stream.servers[0]?.url || '';
+
+  const getStreamQuality = (url: string, title?: string | null, description?: string | null) => {
+    const normalized = `${url} ${title ?? ''} ${description ?? ''}`.toLowerCase();
+    if (normalized.includes('2160') || normalized.includes('4k')) {
+      return { level: '4K', label: 'Ultra HD' };
+    }
+    if (normalized.includes('1080') || normalized.includes('fhd')) {
+      return { level: 'FHD', label: 'Full HD' };
+    }
+    if (normalized.includes('720') || normalized.includes('hd')) {
+      return { level: 'HD', label: 'HD' };
+    }
+    if (normalized.includes('480') || normalized.includes('sd')) {
+      return { level: 'SD', label: 'SD' };
+    }
+    return { level: 'Unknown', label: 'غير معروف' };
+  };
+
+  const formatQualityInfo = (quality: { level: string; label: string }) => {
+    const map: Record<string, { className: string; icon: string; label: string }> = {
+      '4K': { className: 'text-purple-300', icon: '4K', label: '4K' },
+      FHD: { className: 'text-emerald-300', icon: 'FHD', label: 'Full HD' },
+      HD: { className: 'text-blue-300', icon: 'HD', label: 'HD' },
+      SD: { className: 'text-yellow-300', icon: 'SD', label: 'SD' },
+    };
+    return map[quality.level] ?? { className: 'text-slate-400', icon: '•', label: quality.label };
+  };
+
+  const handleDeleteRefreshConfig = (configId: string) => {
+    setRefreshConfigs((prev) => prev.filter((config) => config.id !== configId));
+    if (editingRefresh?.id === configId) {
+      setEditingRefresh(null);
+      setRefreshForm({
+        name: '',
+        url: '',
+        interval: 'daily',
+        notifyEmail: '',
+      });
+    }
+    toast.success('تم حذف جدول التحديث');
+  };
+
+  const handleEditRefreshConfig = (config: PlaylistRefreshConfig) => {
+    setEditingRefresh(config);
+    setRefreshForm({
+      name: config.name,
+      url: config.url,
+      interval: config.interval,
+      notifyEmail: config.notifyEmail,
     });
   };
 
-  const updateServerUrl = (index: number, value: string) => {
-    const newServerUrls = [...streamForm.serverUrls];
-    newServerUrls[index] = value;
-    setStreamForm({
-      ...streamForm,
-      serverUrls: newServerUrls,
-    });
-  };
-
-  const addSelectedChannels = async () => {
-    if (selectedChannels.length === 0) {
-      toast.error('الرجا تحديد قناة واحدة على الأقل');
+  const handleSaveRefreshConfig = () => {
+    if (!refreshForm.name || !refreshForm.url) {
+      toast.error('الرجاء إدخال الاسم والرابط');
       return;
     }
+    const id =
+      editingRefresh?.id ??
+      (typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? crypto.randomUUID()
+        : `refresh-${Date.now()}`);
+    const nextRefreshAt = new Date();
+    if (refreshForm.interval === 'hourly') {
+      nextRefreshAt.setHours(nextRefreshAt.getHours() + 1);
+    } else if (refreshForm.interval === 'daily') {
+      nextRefreshAt.setDate(nextRefreshAt.getDate() + 1);
+    } else {
+      nextRefreshAt.setDate(nextRefreshAt.getDate() + 7);
+    }
 
-  const handleExportAnalytics = async () => {
+    const newConfig: PlaylistRefreshConfig = {
+      id,
+      name: refreshForm.name,
+      url: refreshForm.url,
+      interval: refreshForm.interval,
+      notifyEmail: refreshForm.notifyEmail,
+      lastRefreshedAt: editingRefresh?.lastRefreshedAt,
+      nextRefreshAt: nextRefreshAt.toISOString(),
+      lastStatus: editingRefresh?.lastStatus,
+      lastError: editingRefresh?.lastError,
+      lastChannelCount: editingRefresh?.lastChannelCount,
+      channelUrls: editingRefresh?.channelUrls,
+      history: editingRefresh?.history ?? [],
+    };
+
+    setRefreshConfigs((prev) => {
+      if (editingRefresh) {
+        return prev.map((config) => (config.id === editingRefresh.id ? newConfig : config));
+      }
+      return [newConfig, ...prev];
+    });
+    setEditingRefresh(null);
+    setRefreshForm({
+      name: '',
+      url: '',
+      interval: 'daily',
+      notifyEmail: '',
+    });
+    toast.success(editingRefresh ? 'تم تحديث الجدول' : 'تم إضافة جدول جديد');
+  };
+
+  const refreshPlaylist = async (config: PlaylistRefreshConfig) => {
+    setRefreshingIds((prev) => new Set(prev).add(config.id));
+    try {
+      const response = await fetch(config.url);
+      if (!response.ok) {
+        throw new Error('فشل في تحميل القائمة');
+      }
+      const content = await response.text();
+      const urls = content
+        .split('\n')
+        .map((line) => line.trim())
+        .filter((line) => line && !line.startsWith('#'));
+      const totalChannels = urls.length;
+      const lastCount = config.lastChannelCount ?? 0;
+      const addedChannels = Math.max(0, totalChannels - lastCount);
+      const removedChannels = Math.max(0, lastCount - totalChannels);
+      const timestamp = new Date().toISOString();
+
+      const historyEntry: RefreshHistoryEntry = {
+        id: `history-${Date.now()}`,
+        timestamp,
+        status: 'success',
+        totalChannels,
+        addedChannels,
+        removedChannels,
+        message: 'تم تحديث القائمة',
+      };
+
+      setRefreshConfigs((prev) =>
+        prev.map((item) =>
+          item.id === config.id
+            ? {
+                ...item,
+                lastRefreshedAt: timestamp,
+                nextRefreshAt: new Date(
+                  Date.now() +
+                    (config.interval === 'hourly'
+                      ? 60 * 60 * 1000
+                      : config.interval === 'daily'
+                      ? 24 * 60 * 60 * 1000
+                      : 7 * 24 * 60 * 60 * 1000)
+                ).toISOString(),
+                lastStatus: 'success',
+                lastError: undefined,
+                lastChannelCount: totalChannels,
+                channelUrls: urls,
+                history: [historyEntry, ...item.history],
+              }
+            : item
+        )
+      );
+      toast.success('تم تحديث القائمة بنجاح');
+    } catch (error) {
+      const timestamp = new Date().toISOString();
+      setRefreshConfigs((prev) =>
+        prev.map((item) =>
+          item.id === config.id
+            ? {
+                ...item,
+                lastRefreshedAt: timestamp,
+                lastStatus: 'failed',
+                lastError: error instanceof Error ? error.message : 'فشل التحديث',
+                history: [
+                  {
+                    id: `history-${Date.now()}`,
+                    timestamp,
+                    status: 'failed',
+                    totalChannels: 0,
+                    addedChannels: 0,
+                    removedChannels: 0,
+                    message: error instanceof Error ? error.message : 'فشل التحديث',
+                  },
+                  ...item.history,
+                ],
+              }
+            : item
+        )
+      );
+      toast.error('فشل تحديث القائمة');
+    } finally {
+      setRefreshingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(config.id);
+        return next;
+      });
+    }
+  };
+
+  const handleExportAnalytics = () => {
+    const payload = {
+      exportedAt: new Date().toISOString(),
+      range: analyticsRange,
+      cards: analyticsCards,
+      topChannels,
+      uptimeStats,
+      peakUsage,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `analytics-${analyticsRange}.json`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+    toast.success('تم تنزيل بيانات التحليلات');
+  };
+
+  const handleExportBackup = (format: 'json' | 'sql') => {
     setBackupProcessing(true);
     try {
-      const response = await fetch('/api/admin/analytics/export');
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'فشل تصدير التحليلات');
-      }
-      const blob = await response.blob();
+      const payload = {
+        exportedAt: new Date().toISOString(),
+        streams,
+        users,
+        ads,
+        categories,
+        backupSchedule,
+      };
+      const data =
+        format === 'json'
+          ? JSON.stringify(payload, null, 2)
+          : `-- Backup generated at ${payload.exportedAt}\n-- Streams: ${streams.length}\n-- Users: ${users.length}\n-- Ads: ${ads.length}\n`;
+      const blob = new Blob([data], {
+        type: format === 'json' ? 'application/json' : 'text/plain',
+      });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = 'analytics.json';
+      link.download = `backup.${format === 'json' ? 'json' : 'sql'}`;
       document.body.appendChild(link);
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
-      toast.success('تم تنزيل بيانات التحليلات');
+      setLastBackupAt(payload.exportedAt);
+      toast.success('تم تصدير النسخة الاحتياطية');
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'فشل تصدير التحليلات');
+      toast.error('فشل تصدير النسخة الاحتياطية');
     } finally {
       setBackupProcessing(false);
     }
   };
 
-  // User operations
-  const handleCreateUser = async () => {
+  const handleImportBackup = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setBackupProcessing(true);
     try {
-      const response = await fetch('/api/users', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(userForm),
-      });
-      if (!response.ok) throw new Error('Failed to create user');
-      toast.success('تم إنشاء المستخدم بنجاح');
-      setUserFormOpen(false);
-      resetUserForm();
-      fetchData();
+      const content = await file.text();
+      const payload = JSON.parse(content);
+      if (payload.streams) {
+        setStreams(payload.streams);
+      }
+      if (payload.users) {
+        setUsers(payload.users);
+      }
+      if (payload.ads) {
+        setAds(payload.ads);
+      }
+      if (payload.categories) {
+        setCategories(payload.categories);
+      }
+      if (payload.backupSchedule) {
+        setBackupSchedule(payload.backupSchedule);
+      }
+      setLastBackupAt(new Date().toISOString());
+      toast.success('تم استيراد النسخة الاحتياطية');
     } catch (error) {
-      toast.error('فشل في إنشاء المستخدم');
+      toast.error('فشل استيراد النسخة الاحتياطية');
+    } finally {
+      setBackupProcessing(false);
+      event.target.value = '';
     }
   };
 
-  const handleUpdateUser = async () => {
-    if (!editingUser) return;
+  const handleExportChannels = () => {
+    const headers = ['id', 'title', 'description', 'published', 'primaryUrl'];
+    const rows = streams.map((stream) => [
+      stream.id,
+      stream.title,
+      stream.description ?? '',
+      stream.published ? '1' : '0',
+      getPrimaryServerUrl(stream),
+    ]);
+    const csv = [headers.join(','), ...rows.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'streams.csv';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+    toast.success('تم تصدير القنوات');
+  };
+
+  const handleImportBatchFile = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const text = await file.text();
+    setBatchUrlText(text);
+    toast.success('تم تحميل الملف');
+  };
+
+  const handleBatchUrlUpdate = async () => {
+    if (!batchUrlText.trim()) {
+      toast.error('أدخل بيانات التحديث أولاً');
+      return;
+    }
+    setBatchProcessing(true);
     try {
-      const response = await fetch('/api/users', {
+      const updates = batchUrlText
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .map((line) => line.split(',').map((part) => part.trim()))
+        .filter((parts) => parts.length >= 2)
+        .map(([id, url]) => ({ id, url }));
+
+      await Promise.all(
+        updates.map((update) =>
+          fetch('/api/servers', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: update.id, url: update.url }),
+          })
+        )
+      );
+      toast.success('تم تحديث الروابط');
+      setBatchUrlText('');
+      await fetchData();
+    } catch (error) {
+      toast.error('فشل تحديث الروابط');
+    } finally {
+      setBatchProcessing(false);
+    }
+  };
+
+  const handleBatchDeleteStreams = async () => {
+    if (!batchDeleteIds.trim()) {
+      toast.error('أدخل معرفات القنوات أولاً');
+      return;
+    }
+    setBatchProcessing(true);
+    try {
+      const ids = batchDeleteIds.split(',').map((id) => id.trim()).filter(Boolean);
+      await Promise.all(ids.map((id) => fetch(`/api/streams/${id}`, { method: 'DELETE' })));
+      toast.success('تم حذف القنوات المحددة');
+      setBatchDeleteIds('');
+      await fetchData();
+    } catch (error) {
+      toast.error('فشل حذف القنوات');
+    } finally {
+      setBatchProcessing(false);
+    }
+  };
+
+  const handleBatchMetadataUpdate = async () => {
+    if (!batchMetaIds.trim()) {
+      toast.error('أدخل معرفات القنوات أولاً');
+      return;
+    }
+    setBatchProcessing(true);
+    try {
+      const ids = batchMetaIds.split(',').map((id) => id.trim()).filter(Boolean);
+      await Promise.all(
+        ids.map((id) =>
+          fetch(`/api/streams/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              categoryId: batchCategory || undefined,
+              description: batchDescription || undefined,
+            }),
+          })
+        )
+      );
+      toast.success('تم تحديث بيانات القنوات');
+      setBatchMetaIds('');
+      setBatchCategory('');
+      setBatchDescription('');
+      await fetchData();
+    } catch (error) {
+      toast.error('فشل تحديث بيانات القنوات');
+    } finally {
+      setBatchProcessing(false);
+    }
+  };
+
+  const handleBulkAssignCategory = async (categoryId: string) => {
+    if (selectedStreamIds.size === 0) {
+      toast.error('حدد قنوات أولاً');
+      return;
+    }
+    setBatchProcessing(true);
+    try {
+      await Promise.all(
+        Array.from(selectedStreamIds).map((id) =>
+          fetch(`/api/streams/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ categoryId }),
+          })
+        )
+      );
+      setSelectedStreamIds(new Set());
+      toast.success('تم تطبيق التصنيف');
+      await fetchData();
+    } catch (error) {
+      toast.error('فشل تطبيق التصنيف');
+    } finally {
+      setBatchProcessing(false);
+    }
+  };
+
+  const handleCreateCategory = () => {
+    if (!categoryName.trim()) {
+      toast.error('أدخل اسم التصنيف');
+      return;
+    }
+    const newCategory: Category = {
+      id:
+        typeof crypto !== 'undefined' && 'randomUUID' in crypto
+          ? crypto.randomUUID()
+          : `category-${Date.now()}`,
+      name: categoryName.trim(),
+      parentId: categoryParentId || undefined,
+    };
+    setCategories((prev) => [newCategory, ...prev]);
+    setCategoryName('');
+    setCategoryParentId('');
+    toast.success('تم إضافة التصنيف');
+  };
+
+  const handleDeleteCategory = (categoryId: string) => {
+    setCategories((prev) => prev.filter((category) => category.id !== categoryId));
+    setStreams((prev) =>
+      prev.map((stream) =>
+        stream.categoryId === categoryId ? { ...stream, categoryId: null } : stream
+      )
+    );
+    toast.success('تم حذف التصنيف');
+  };
+
+  const handleCategoryDrop = async (
+    event: DragEvent<HTMLDivElement>,
+    categoryId?: string
+  ) => {
+    event.preventDefault();
+    const streamId = event.dataTransfer.getData('text/plain');
+    if (!streamId) return;
+    try {
+      await fetch(`/api/streams/${streamId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: editingUser.id, ...userForm }),
+        body: JSON.stringify({ categoryId: categoryId || null }),
       });
-      if (!response.ok) throw new Error('Failed to update user');
-      toast.success('تم تحديث المستخدم بنجاح');
-      setUserFormOpen(false);
-      setEditingUser(null);
-      resetUserForm();
-      fetchData();
+      setStreams((prev) =>
+        prev.map((stream) =>
+          stream.id === streamId ? { ...stream, categoryId: categoryId || null } : stream
+        )
+      );
+      toast.success('تم تحديث التصنيف');
     } catch (error) {
-      toast.error('فشل في تحديث المستخدم');
+      toast.error('فشل تحديث التصنيف');
     }
   };
 
-  const handleDeleteUser = async (id: string) => {
+  const handleMergeDuplicates = async (primaryId: string, duplicateIds: string[]) => {
+    if (duplicateIds.length === 0) return;
+    setDuplicateProcessing(true);
     try {
-      await fetch(`/api/users?id=${id}`, { method: 'DELETE' });
-      toast.success('تم حذف المستخدم بنجاح');
-      fetchData();
+      const primaryStream = streams.find((stream) => stream.id === primaryId);
+      let priorityBase = primaryStream?.servers.length ?? 0;
+      const duplicates = streams.filter((stream) => duplicateIds.includes(stream.id));
+      const serverCreates = duplicates.flatMap((stream) =>
+        stream.servers.map((server) => ({
+          streamId: primaryId,
+          name: server.name || `الخادم ${priorityBase + 1}`,
+          url: server.url,
+          priority: priorityBase++,
+        }))
+      );
+      await Promise.all(
+        serverCreates.map((server) =>
+          fetch('/api/servers', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(server),
+          })
+        )
+      );
+      await Promise.all(
+        duplicateIds.map((id) => fetch(`/api/streams/${id}`, { method: 'DELETE' }))
+      );
+      toast.success('تم دمج التكرارات');
+      await fetchData();
     } catch (error) {
-      toast.error('فشل في حذف المستخدم');
+      toast.error('فشل دمج التكرارات');
+    } finally {
+      setDuplicateProcessing(false);
     }
   };
 
-  const openUserForm = (user?: User) => {
-    if (user) {
-      setEditingUser(user);
-      setUserForm({
-        email: user.email,
-        name: user.name || '',
-        password: '',
-        role: user.role,
-      });
-    } else {
-      setEditingUser(null);
-      resetUserForm();
+  const handleMergeAllDuplicates = async () => {
+    for (const group of duplicateStreamGroups) {
+      const primaryId = mergePrimaryId || group[0].id;
+      const duplicateIds = group.map((stream) => stream.id).filter((id) => id !== primaryId);
+      if (duplicateIds.length > 0) {
+        await handleMergeDuplicates(primaryId, duplicateIds);
+      }
     }
-    setUserFormOpen(true);
   };
 
-  const resetUserForm = () => {
-    setUserForm({
-      email: '',
-      name: '',
-      password: '',
-      role: 'user',
-    });
-  };
-
-  // Ad operations
-  const handleCreateAd = async () => {
+  const handleRegenerateThumbnails = (includeExisting: boolean) => {
+    setThumbnailProcessing(true);
     try {
-      const response = await fetch('/api/ads', {
+      let updated = 0;
+      let skipped = 0;
+      setStreams((prev) =>
+        prev.map((stream) => {
+          if (!includeExisting && stream.thumbnail) {
+            skipped += 1;
+            return stream;
+          }
+          updated += 1;
+          return {
+            ...stream,
+            thumbnail:
+              stream.thumbnail && includeExisting
+                ? `${stream.thumbnail}?refresh=${Date.now()}`
+                : stream.thumbnail || `https://placehold.co/600x400?text=${encodeURIComponent(stream.title)}`,
+          };
+        })
+      );
+      setThumbnailSummary({ updated, skipped, failed: 0 });
+      toast.success('تم تحديث الصور المصغرة');
+    } catch (error) {
+      setThumbnailSummary({ updated: 0, skipped: 0, failed: streams.length });
+      toast.error('فشل تحديث الصور المصغرة');
+    } finally {
+      setThumbnailProcessing(false);
+    }
+  };
+
+  const handleQualityTest = async () => {
+    if (!qualityUrl.trim()) {
+      toast.error('أدخل رابط البث');
+      return;
+    }
+    setQualityProcessing(true);
+    try {
+      const response = await fetch('/api/admin/quality-test', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(adForm),
+        body: JSON.stringify({ url: qualityUrl }),
       });
-      if (!response.ok) throw new Error('Failed to create ad');
-      toast.success('تم إنشاء الإعلان بنجاح');
-      setAdFormOpen(false);
-      resetAdForm();
-      fetchData();
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'فشل اختبار الجودة');
+      }
+      setQualityReport({
+        status: 'success',
+        qualityLabel: data.qualityLabel,
+        resolution: data.resolution,
+        bitrateKbps: data.bitrateKbps,
+        latencyMs: data.latencyMs,
+        bufferMs: data.bufferMs,
+      });
     } catch (error) {
-      toast.error('فشل في إنشاء الإعلان');
+      setQualityReport({
+        status: 'failed',
+        message: error instanceof Error ? error.message : 'فشل اختبار الجودة',
+      });
+    } finally {
+      setQualityProcessing(false);
     }
   };
 
-  const handleUpdateAd = async () => {
-    if (!editingAd) return;
+  const handlePreviewMetadata = async () => {
+    const selectedStream = streams.find((stream) => stream.id === previewStreamId);
+    const url = previewUrl || selectedStream?.servers[0]?.url;
+    if (!url) {
+      toast.error('أدخل رابط البث');
+      return;
+    }
+    setPreviewUrl(url);
     try {
-      const response = await fetch('/api/ads', {
-        method: 'PUT',
+      const response = await fetch('/api/admin/preview-info', {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: editingAd.id, ...adForm }),
+        body: JSON.stringify({ url }),
       });
-      if (!response.ok) throw new Error('Failed to update ad');
-      toast.success('تم تحديث الإعلان بنجاح');
-      setAdFormOpen(false);
-      setEditingAd(null);
-      resetAdForm();
-      fetchData();
-    } catch (error) {
-      toast.error('فشل في تحديث الإعلان');
-    }
-  };
-
-  const handleDeleteAd = async (id: string) => {
-    try {
-      await fetch(`/api/ads?id=${id}`, { method: 'DELETE' });
-      toast.success('تم حذف الإعلان بنجاح');
-      fetchData();
-    } catch (error) {
-      toast.error('فشل في حذف الإعلان');
-    }
-  };
-
-  const openAdForm = (ad?: Ad) => {
-    if (ad) {
-      setEditingAd(ad);
-      setAdForm({
-        streamId: '',
-        position: ad.position,
-        title: ad.title || '',
-        imageUrl: ad.imageUrl,
-        linkUrl: ad.linkUrl || '',
-        active: ad.active,
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'فشل جلب بيانات البث');
+      }
+      setPreviewReport({
+        status: 'success',
+        codec: data.codec,
+        resolution: data.resolution,
+        bitrateKbps: data.bitrateKbps,
+        latencyMs: data.latencyMs,
       });
-    } else {
-      setEditingAd(null);
-      resetAdForm();
+    } catch (error) {
+      setPreviewReport({
+        status: 'failed',
+        message: error instanceof Error ? error.message : 'فشل جلب بيانات البث',
+      });
     }
-    setAdFormOpen(true);
   };
 
-  const resetAdForm = () => {
-    setAdForm({
-      streamId: '',
-      position: 'home-top',
-      title: '',
-      imageUrl: '',
-      linkUrl: '',
-      active: true,
-    });
-  };
-
-  const handleDeleteRefreshConfig = (configId: string) => {
-    setRefreshConfigs((prev) => prev.filter((config) => config.id !== configId));
-    toast.success('تم حذف جدول التحديث');
-  };
-
-  // Check all stream statuses
   const checkAllStreamStatus = async () => {
     if (streams.length === 0) {
       toast.error('لا يوجد قنوات للفحص');
@@ -671,7 +1186,7 @@ export default function AdminDashboard() {
     setStreamStatus(new Map());
 
     try {
-      const streamIds = streams.map(s => s.id);
+      const streamIds = streams.map((stream) => stream.id);
       const response = await fetch('/api/channels/check-status', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -684,9 +1199,8 @@ export default function AdminDashboard() {
         throw new Error(data.error || 'Status check failed');
       }
 
-      // Convert results to Map
       const statusMap = new Map<string, 'working' | 'broken'>();
-      data.results.forEach((result: any) => {
+      data.results.forEach((result: { streamId: string; status: 'working' | 'broken' }) => {
         statusMap.set(result.streamId, result.status);
       });
 
@@ -698,11 +1212,6 @@ export default function AdminDashboard() {
     } finally {
       setCheckingStatus(false);
     }
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem('adminUser');
-    window.location.href = '/admin-portal-secure-2025-x7k9m2';
   };
 
   // Stream operations
@@ -3199,443 +3708,225 @@ export default function AdminDashboard() {
                     )}
                   </div>
                 )}
-              </Button>
-            </div>
-          </div>
 
-          <nav className="p-4 space-y-2">
-            <Button
-              variant={activeTab === 'streams' ? 'default' : 'ghost'}
-              className={`w-full justify-start ${
-                activeTab === 'streams'
-                  ? 'bg-gradient-to-r from-red-600 to-red-700 text-white'
-                  : 'text-slate-300 hover:bg-slate-800'
-              }`}
-              onClick={() => setActiveTab('streams')}
-            >
-              <Tv className="h-5 w-5" />
-              {sidebarOpen && <span className="mr-2">البث المباشر</span>}
-            </Button>
-
-            <Button
-              variant={activeTab === 'users' ? 'default' : 'ghost'}
-              className={`w-full justify-start ${
-                activeTab === 'users'
-                  ? 'bg-gradient-to-r from-red-600 to-red-700 text-white'
-                  : 'text-slate-300 hover:bg-slate-800'
-              }`}
-              onClick={() => setActiveTab('users')}
-            >
-              <Users className="h-5 w-5" />
-              {sidebarOpen && <span className="mr-2">المستخدمون</span>}
-            </Button>
-
-            <Button
-              variant={activeTab === 'ads' ? 'default' : 'ghost'}
-              className={`w-full justify-start ${
-                activeTab === 'ads'
-                  ? 'bg-gradient-to-r from-red-600 to-red-700 text-white'
-                  : 'text-slate-300 hover:bg-slate-800'
-              }`}
-              onClick={() => setActiveTab('ads')}
-            >
-              <ImageIcon className="h-5 w-5" />
-              {sidebarOpen && <span className="mr-2">الإعلانات</span>}
-            </Button>
-          </nav>
-
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {activeTab === 'infrastructure' && (
+                  <div className="space-y-6">
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                       <Card className="bg-slate-800/50 border-slate-700">
                         <CardHeader className="border-b border-slate-700">
-                          <CardTitle className="text-white flex items-center gap-2">
-                            <ServerCog className="h-5 w-5 text-red-400" />
-                            التوسع التلقائي
-                          </CardTitle>
+                          <CardTitle className="text-white">حالة الخوادم</CardTitle>
                           <CardDescription className="text-slate-400">
-                            أضف خوادم جديدة خلال فترات الذروة تلقائياً.
+                            مراقبة تشغيل الخوادم الأساسية.
                           </CardDescription>
                         </CardHeader>
                         <CardContent className="p-6 space-y-4">
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                              <Label className="text-slate-300">الحد الأدنى للخوادم</Label>
-                              <Input
-                                type="number"
-                                value={autoScalingConfig.minServers}
-                                onChange={(event) =>
-                                  setAutoScalingConfig({
-                                    ...autoScalingConfig,
-                                    minServers: Number(event.target.value),
-                                  })
-                                }
-                                className="bg-slate-800 border-slate-700 text-white"
-                              />
+                          {uptimeStats.map((stat) => (
+                            <div key={stat.server} className="flex items-center justify-between text-sm">
+                              <span className="text-slate-300">{stat.server}</span>
+                              <span className="text-emerald-400">{stat.uptime}</span>
                             </div>
-                            <div className="space-y-2">
-                              <Label className="text-slate-300">العنوان</Label>
-                              <Input
-                                value={streamForm.title}
-                                onChange={(e) =>
-                                  setStreamForm({ ...streamForm, title: e.target.value })
-                                }
-                                className="bg-slate-800 border-slate-700 text-white"
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label htmlFor="description" className="text-slate-300 font-semibold">
-                                وصف القناة
-                              </Label>
-                              <p className="text-xs text-slate-500">
-                                اكف وصفاً مفصلاً للقناة لتحسين محركات البحث (SEO)
-                              </p>
-                              <Textarea
-                                id="description"
-                                value={streamForm.description}
-                                onChange={(e) =>
-                                  setStreamForm({ ...streamForm, description: e.target.value })
-                                }
-                                placeholder="اكتب وصفاً مفصلاً للقناة هنا... مثال: قناة إخبارية تبث الأخبار على مدار الساعة بجودة عالية"
-                                className="bg-slate-800 border-slate-700 text-white min-h-[120px] resize-y"
-                                maxLength={2000}
-                              />
-                              <div className="flex items-center justify-between text-xs">
-                                <p className="text-slate-500">
-                                  أضف كلمات مفتاحية مثل: أخبار، رياضة، ترفيه، بث مباشر
-                                </p>
-                                <p className="text-slate-400">
-                                  {streamForm.description.length} / 2000
-                                </p>
-                              </div>
-                            </div>
-                            <div className="space-y-2">
-                              <Label className="text-slate-300">رابط الصورة المصغرة</Label>
-                              <Input
-                                value={streamForm.thumbnail}
-                                onChange={(e) =>
-                                  setStreamForm({ ...streamForm, thumbnail: e.target.value })
-                                }
-                                placeholder="https://..."
-                                className="bg-slate-800 border-slate-700 text-white"
-                              />
-                            </div>
+                          ))}
+                          <Button
+                            variant="outline"
+                            className="w-full border-slate-700 text-slate-300"
+                            onClick={checkAllStreamStatus}
+                            disabled={checkingStatus}
+                          >
+                            {checkingStatus ? 'جاري التحقق...' : 'إعادة فحص القنوات'}
+                          </Button>
+                        </CardContent>
+                      </Card>
 
-                            {/* M3U Playlist URL Section */}
-                            <div className="space-y-2 pt-4 border-t border-slate-700">
-                              <Label htmlFor="playlist" className="text-slate-300 font-semibold">
-                                رابط ملف القوائم M3U (اختياري)
-                              </Label>
-                              <p className="text-xs text-slate-500">
-                                يمكنك إضافة ملف قائمة M3U واحد بدلاً من إضافة روابط فردية
-                              </p>
-                              <div className="flex gap-2">
-                                <Input
-                                  id="playlist"
-                                  value={streamForm.playlistUrl}
-                                  onChange={(e) =>
-                                    setStreamForm({ ...streamForm, playlistUrl: e.target.value })
-                                  }
-                                  placeholder="https://example.com/playlist.m3u"
-                                  className="bg-slate-800 border-slate-700 text-white flex-1"
-                                />
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  onClick={handleParsePlaylist}
-                                  disabled={loadingChannels || !streamForm.playlistUrl}
-                                  className="border-slate-700 text-slate-300 whitespace-nowrap"
-                                >
-                                  {loadingChannels ? (
-                                    <>
-                                      <div className="mr-2 h-4 w-4 border-2 border-slate-500 border-t-transparent animate-spin" />
-                                      تحليل...
-                                    </>
-                                  ) : (
-                                    <>
-                                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-2a2 2 0 012-12V7a2 2 0 01-2-2-2-2z" />
-                                      </svg>
-                                      تحليل
-                                    </>
-                                  )}
-                                </Button>
-                              </div>
-                              {parsedChannels.length > 0 && (
-                                <div className="mt-3 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
-                                  <p className="text-sm text-blue-200 mb-2">
-                                    <span className="font-semibold">تم العثور على {parsedChannels.length} قناة!</span>
-                                    <span className="mx-2">|</span>
-                                    <Button
-                                      type="button"
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={toggleAllChannels}
-                                      className="border-blue-400 text-blue-300 text-xs"
-                                    >
-                                      {selectedChannels.length === parsedChannels.length ? 'إلغاء تحديد الكل' : `تحديد الكل (${parsedChannels.length})`}
-                                    </Button>
-                                  </p>
-                                  <Button
-                                    type="button"
-                                    onClick={addSelectedChannels}
-                                    disabled={selectedChannels.length === 0}
-                                    size="sm"
-                                    className="bg-blue-600 hover:bg-blue-700 text-white text-xs"
-                                  >
-                                    <Plus className="h-3 w-3 mr-1" />
-                                    إضافة إلى البث ({selectedChannels.length})
-                                  </Button>
-                                </div>
-                              )}
-
-                              {/* Channel List */}
-                              {parsedChannels.length > 0 && (
-                                <div className="mt-3 max-h-60 overflow-y-auto border border-slate-700 rounded-lg bg-slate-900/50">
-                                  {parsedChannels.slice(0, 50).map((channel, index) => (
-                                    <div
-                                      key={`${channel.url}-${index}`}
-                                      className="flex items-center gap-3 p-2 hover:bg-slate-800/50 border-b border-slate-800 last:border-b-0 cursor-pointer"
-                                      onClick={() => toggleChannelSelection(channel)}
-                                    >
-                                      <input
-                                        type="checkbox"
-                                        checked={selectedChannels.some(c => c.url === channel.url)}
-                                        onChange={() => {}}
-                                        className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-blue-600 focus:ring-blue-500"
-                                      />
-                                      {channel.logo && (
-                                        <img
-                                          src={channel.logo}
-                                          alt={channel.channelName || ''}
-                                          className="w-8 h-8 object-contain"
-                                          onError={(e) => {
-                                            (e.target as HTMLImageElement).style.display = 'none';
-                                          }}
-                                        />
-                                      )}
-                                      <div className="flex-1 min-w-0">
-                                        <p className="text-sm text-white truncate">
-                                          {channel.channelName || `قناة ${index + 1}`}
-                                        </p>
-                                        {channel.channelId && (
-                                          <p className="text-xs text-slate-400">ID: {channel.channelId}</p>
-                                        )}
-                                      </div>
-                                    </div>
-                                  ))}
-                                  {parsedChannels.length > 50 && (
-                                    <div className="p-3 text-center text-sm text-slate-400">
-                                      وجدنا {parsedChannels.length} قناة، يتم عرض أول 50 قناة فقط
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-
-                            {/* Server URLs Section */}
-                            <div className="space-y-4 pt-4 border-t border-slate-700">
-                              <div className="flex items-center justify-between">
-                                <Label className="text-slate-300 text-base font-semibold">
-                                  روابط البث (M3U/M3U8)
-                                </Label>
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={addServerUrl}
-                                  className="border-slate-600 text-slate-300"
-                                >
-                                  <Plus className="h-4 w-4 mr-1" />
-                                  إضافة خادم
-                                </Button>
-                              </div>
-                              <p className="text-xs text-slate-500">
-                                أضف روابط البث المباشرة للخوادم المختلفة (يمكنك إضافة عدد غير محدود)
-                              </p>
-
-                              <div className="space-y-3 max-h-80 overflow-y-auto">
-                                {streamForm.serverUrls.map((url, index) => (
-                                  <div key={index} className="flex items-start gap-2">
-                                    <div className="flex-1 space-y-2">
-                                      <Label htmlFor={`server-${index}`} className="text-slate-300">
-                                        الخادم {index + 1}
-                                      </Label>
-                                      <Input
-                                        id={`server-${index}`}
-                                        value={url}
-                                        onChange={(e) => updateServerUrl(index, e.target.value)}
-                                        placeholder="https://example.com/stream.m3u8"
-                                        className="bg-slate-800 border-slate-700 text-white"
-                                      />
-                                    </div>
-                                    {streamForm.serverUrls.length > 1 && (
-                                      <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => removeServerUrl(index)}
-                                        className="mt-5 text-red-400 hover:text-red-300 hover:bg-red-900/20"
-                                      >
-                                        <Trash2 className="h-4 w-4" />
-                                      </Button>
-                                    )}
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-
-                            <div className="flex items-center space-x-2 space-x-reverse">
-                              <Switch
-                                id="published"
-                                checked={streamForm.published}
-                                onCheckedChange={(checked) =>
-                                  setStreamForm({ ...streamForm, published: checked })
-                                }
-                              />
-                              <Label htmlFor="published" className="text-slate-300">
-                                نشر الآن
-                              </Label>
-                            </div>
+                      <Card className="bg-slate-800/50 border-slate-700">
+                        <CardHeader className="border-b border-slate-700">
+                          <CardTitle className="text-white">مؤشرات الأداء</CardTitle>
+                          <CardDescription className="text-slate-400">
+                            ملخص سريع لاستهلاك الموارد.
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent className="p-6 space-y-3 text-sm text-slate-300">
+                          <div className="flex items-center justify-between">
+                            <span>متوسط التحميل</span>
+                            <span className="text-blue-300">{autoScalingConfig.targetLoad}%</span>
                           </div>
-                          <DialogFooter>
-                            <Button
-                              variant="outline"
-                              onClick={() => setStreamFormOpen(false)}
-                              className="border-slate-700 text-slate-300"
-                            >
-                              إلغاء
-                            </Button>
-                            <Button
-                              onClick={editingStream ? handleUpdateStream : handleCreateStream}
-                              className="bg-gradient-to-r from-red-600 to-red-700"
-                            >
-                              {editingStream ? 'حفظ التعديلات' : 'إضافة'}
-                            </Button>
-                          </DialogFooter>
-                        </DialogContent>
-                      </Dialog>
-                    </div>
+                          <div className="flex items-center justify-between">
+                            <span>الخوادم النشطة</span>
+                            <span className="text-slate-200">{streams.length}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span>تنبيهات اليوم</span>
+                            <span className="text-yellow-300">3</span>
+                          </div>
+                        </CardContent>
+                      </Card>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                      {streams.map((stream) => (
-                        <Card key={stream.id} className="bg-slate-800/50 border-slate-700">
-                          <CardHeader>
-                            <div className="flex items-start justify-between">
-                              <div className="flex-1">
-                                <CardTitle className="text-white text-lg">
-                                  {stream.title}
-                                </CardTitle>
-                                <CardDescription className="text-slate-400 mt-2">
-                                  {stream.description || 'لا يوجد وصف'}
-                                </CardDescription>
+                      <Card className="bg-slate-800/50 border-slate-700">
+                        <CardHeader className="border-b border-slate-700">
+                          <CardTitle className="text-white">تشغيل النسخ الاحتياطي</CardTitle>
+                          <CardDescription className="text-slate-400">
+                            إدارة دورات النسخ الاحتياطي المحلية.
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent className="p-6 space-y-3 text-sm text-slate-300">
+                          <p>آخر نسخة: {lastBackupAt ? new Date(lastBackupAt).toLocaleString('ar') : 'غير متاحة'}</p>
+                          <Button
+                            className="w-full bg-gradient-to-r from-red-600 to-red-700"
+                            onClick={() => handleExportBackup('json')}
+                            disabled={backupProcessing}
+                          >
+                            إنشاء نسخة جديدة
+                          </Button>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  </div>
+                )}
+
+                {activeTab === 'abTesting' && (
+                  <div className="space-y-6">
+                    <Card className="bg-slate-800/50 border-slate-700">
+                      <CardHeader className="border-b border-slate-700">
+                        <CardTitle className="text-white">اختبارات A/B الجارية</CardTitle>
+                        <CardDescription className="text-slate-400">
+                          راقب توزيع الترافيك بين البدائل المختلفة.
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="p-6 space-y-4">
+                        {abTests.map((test) => (
+                          <div key={test.id} className="rounded-lg border border-slate-700 p-4 space-y-3">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="text-white font-semibold">{test.name}</p>
+                                <p className="text-xs text-slate-400">{test.description}</p>
                               </div>
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="text-slate-400 hover:text-white"
-                                  >
-                                    <MoreVertical className="h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent className="bg-slate-900 border-slate-700">
-                                  <DropdownMenuItem
-                                    onClick={() => openStreamForm(stream)}
-                                    className="text-slate-300 hover:bg-slate-800"
-                                  >
-                                    <Edit className="mr-2 h-4 w-4" />
-                                    تعديل
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    onClick={() => handleDeleteStream(stream.id)}
-                                    className="text-red-400 hover:bg-slate-800"
-                                  >
-                                    <Trash2 className="mr-2 h-4 w-4" />
-                                    حذف
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </div>
-                          </CardHeader>
-                          <CardContent>
-                            {stream.thumbnail && (
-                              <img
-                                src={stream.thumbnail}
-                                alt={stream.title}
-                                className="w-full h-32 object-cover rounded-lg mb-4"
-                              />
-                            )}
-                            <div className="flex items-center justify-between text-sm">
-                              <span className="text-slate-400">
-                                {stream.servers.length} خادم
-                              </span>
-                              <span
-                                className={`px-2 py-1 rounded ${
-                                  stream.published
-                                    ? 'bg-green-500/20 text-green-400'
-                                    : 'bg-yellow-500/20 text-yellow-400'
-                                }`}
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="border-slate-700 text-slate-300"
+                                onClick={() =>
+                                  setAbTests((prev) =>
+                                    prev.map((item) =>
+                                      item.id === test.id
+                                        ? {
+                                            ...item,
+                                            status: item.status === 'running' ? 'paused' : 'running',
+                                          }
+                                        : item
+                                    )
+                                  )
+                                }
                               >
-                                {stream.published ? 'منشور' : 'مسودة'}
-                              </span>
+                                {test.status === 'running' ? 'إيقاف' : 'تشغيل'}
+                              </Button>
                             </div>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="w-full mt-4 border-slate-700 text-slate-300"
-                              onClick={() => openServerForm(stream.id)}
-                            >
-                              <Plus className="mr-2 h-4 w-4" />
-                              إضافة خادم
-                            </Button>
-                            <div className="mt-4 space-y-2">
-                              {stream.servers.map((server) => (
-                                <div
-                                  key={server.id}
-                                  className="flex items-center justify-between bg-slate-900/50 p-3 rounded-lg"
-                                >
-                                  <div className="flex-1">
-                                    <p className="text-white text-sm font-medium">
-                                      {server.name}
-                                    </p>
-                                    <p className="text-slate-500 text-xs truncate">
-                                      {server.url}
-                                    </p>
-                                  </div>
-                                  <DropdownMenu>
-                                    <DropdownMenuTrigger asChild>
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="text-slate-400 hover:text-white"
-                                      >
-                                        <MoreVertical className="h-4 w-4" />
-                                      </Button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent className="bg-slate-900 border-slate-700">
-                                      <DropdownMenuItem
-                                        onClick={() => openServerForm(stream.id, server)}
-                                        className="text-slate-300 hover:bg-slate-800"
-                                      >
-                                        <Edit className="mr-2 h-4 w-4" />
-                                        تعديل
-                                      </DropdownMenuItem>
-                                      <DropdownMenuItem
-                                        onClick={() => handleDeleteServer(server.id)}
-                                        className="text-red-400 hover:bg-slate-800"
-                                      >
-                                        <Trash2 className="mr-2 h-4 w-4" />
-                                        حذف
-                                      </DropdownMenuItem>
-                                    </DropdownMenuContent>
-                                  </DropdownMenu>
+                            <div className="space-y-2 text-sm text-slate-300">
+                              {test.variants.map((variant) => (
+                                <div key={variant.name} className="flex items-center justify-between">
+                                  <span>{variant.name}</span>
+                                  <span>{variant.ratio}%</span>
                                 </div>
                               ))}
                             </div>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
+                            <p className="text-xs text-slate-400">
+                              الحالة الحالية: {test.status === 'running' ? 'قيد التشغيل' : 'متوقف'}
+                            </p>
+                          </div>
+                        ))}
+                      </CardContent>
+                    </Card>
+                  </div>
+                )}
+
+                {activeTab === 'featureFlags' && (
+                  <div className="space-y-6">
+                    <Card className="bg-slate-800/50 border-slate-700">
+                      <CardHeader className="border-b border-slate-700">
+                        <CardTitle className="text-white">ميزات الموقع</CardTitle>
+                        <CardDescription className="text-slate-400">
+                          فعّل أو عطّل الميزات التجريبية بسرعة.
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="p-6 space-y-4">
+                        {featureFlags.map((flag) => (
+                          <div key={flag.id} className="flex items-center justify-between rounded-lg border border-slate-700 p-4">
+                            <div>
+                              <p className="text-white font-medium">{flag.name}</p>
+                              <p className="text-xs text-slate-400">{flag.description}</p>
+                            </div>
+                            <Switch
+                              checked={flag.enabled}
+                              onCheckedChange={(checked) =>
+                                setFeatureFlags((prev) =>
+                                  prev.map((item) =>
+                                    item.id === flag.id ? { ...item, enabled: checked } : item
+                                  )
+                                )
+                              }
+                            />
+                          </div>
+                        ))}
+                      </CardContent>
+                    </Card>
+                  </div>
+                )}
+
+                {activeTab === 'siteSettings' && (
+                  <div className="space-y-6">
+                    <Card className="bg-slate-800/50 border-slate-700">
+                      <CardHeader className="border-b border-slate-700">
+                        <CardTitle className="text-white">إعدادات الواجهة</CardTitle>
+                        <CardDescription className="text-slate-400">
+                          إعدادات عامة تظهر في الواجهة الرئيسية.
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="p-6 space-y-4">
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label className="text-slate-300">عنوان الموقع</Label>
+                            <Input
+                              value={siteSettings.siteTitle}
+                              onChange={(e) => setSiteSettings({ ...siteSettings, siteTitle: e.target.value })}
+                              className="bg-slate-800 border-slate-700 text-white"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label className="text-slate-300">البريد الداعم</Label>
+                            <Input
+                              value={siteSettings.supportEmail}
+                              onChange={(e) => setSiteSettings({ ...siteSettings, supportEmail: e.target.value })}
+                              className="bg-slate-800 border-slate-700 text-white"
+                            />
+                          </div>
+                          <div className="space-y-2 lg:col-span-2">
+                            <Label className="text-slate-300">رسالة الصفحة الرئيسية</Label>
+                            <Textarea
+                              value={siteSettings.heroMessage}
+                              onChange={(e) => setSiteSettings({ ...siteSettings, heroMessage: e.target.value })}
+                              className="bg-slate-800 border-slate-700 text-white min-h-[120px]"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label className="text-slate-300">الثيم الافتراضي</Label>
+                            <select
+                              value={siteSettings.defaultTheme}
+                              onChange={(e) =>
+                                setSiteSettings({
+                                  ...siteSettings,
+                                  defaultTheme: e.target.value as SiteSettings['defaultTheme'],
+                                })
+                              }
+                              className="w-full bg-slate-800 border border-slate-700 text-white rounded-md p-2"
+                            >
+                              <option value="dark">داكن</option>
+                              <option value="light">فاتح</option>
+                            </select>
+                          </div>
+                        </div>
+                        <p className="text-xs text-slate-500">
+                          يتم حفظ الإعدادات محلياً على هذا المتصفح.
+                        </p>
+                      </CardContent>
+                    </Card>
                   </div>
                 )}
 
