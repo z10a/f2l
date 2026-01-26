@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, useRef } from 'react';
 import Link from 'next/link';
+import { useParams } from 'next/navigation';
 import { Play, Tv, ArrowRight, Home, Server, Zap, AlertCircle, Info } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -53,7 +54,9 @@ interface StreamRecommendationSettings {
 const FEATURE_FLAGS_KEY = 'websiteFeatureFlags';
 const STREAM_RECOMMENDATIONS_KEY = 'streamRecommendations';
 
-export default function StreamPage({ params }: { params: { id: string } }) {
+export default function StreamPage() {
+  const params = useParams<{ id: string }>();
+  const streamId = Array.isArray(params?.id) ? params.id[0] : params?.id;
   const [stream, setStream] = useState<StreamData | null>(null);
   const [selectedServer, setSelectedServer] = useState<Server | null>(null);
   const [loading, setLoading] = useState(true);
@@ -75,8 +78,9 @@ export default function StreamPage({ params }: { params: { id: string } }) {
   const [allStreams, setAllStreams] = useState<StreamSummary[]>([]);
 
   useEffect(() => {
-    fetchStream();
-  }, [params.id]);
+    if (!streamId) return;
+    fetchStream(streamId);
+  }, [streamId]);
 
   useEffect(() => {
     if (stream && stream.servers.length > 0 && !selectedServer) {
@@ -169,9 +173,9 @@ export default function StreamPage({ params }: { params: { id: string } }) {
     fetchStreams();
   }, [featureFlags.streamRecommended]);
 
-  const fetchStream = async () => {
+  const fetchStream = async (id: string) => {
     try {
-      const response = await fetch(`/api/streams/${params.id}`);
+      const response = await fetch(`/api/streams/${id}`);
       if (!response.ok) {
         throw new Error('Stream not found');
       }
@@ -239,6 +243,20 @@ export default function StreamPage({ params }: { params: { id: string } }) {
     }
   };
 
+  const recommendedStreams = useMemo(() => {
+    if (!featureFlags.streamRecommended || !stream) return [];
+    const pool = allStreams.filter((item) => item.id !== stream.id);
+    if (recommendationSettings.mode === 'manual' && recommendationSettings.manualIds.length > 0) {
+      const manualList = recommendationSettings.manualIds
+        .map((id) => pool.find((item) => item.id === id))
+        .filter((item): item is StreamSummary => Boolean(item));
+      if (manualList.length > 0) {
+        return manualList.slice(0, 2);
+      }
+    }
+    return pool.slice(0, 2);
+  }, [allStreams, featureFlags.streamRecommended, recommendationSettings, stream]);
+
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col bg-gradient-to-b from-slate-50 to-white dark:from-slate-950 dark:to-slate-900" dir="rtl">
@@ -274,20 +292,6 @@ export default function StreamPage({ params }: { params: { id: string } }) {
   const topAds = stream.ads.filter((ad) => ad.position === 'stream-top');
   const bottomAds = stream.ads.filter((ad) => ad.position === 'stream-bottom');
   const sidebarAds = stream.ads.filter((ad) => ad.position === 'stream-sidebar');
-
-  const recommendedStreams = useMemo(() => {
-    if (!featureFlags.streamRecommended || !stream) return [];
-    const pool = allStreams.filter((item) => item.id !== stream.id);
-    if (recommendationSettings.mode === 'manual' && recommendationSettings.manualIds.length > 0) {
-      const manualList = recommendationSettings.manualIds
-        .map((id) => pool.find((item) => item.id === id))
-        .filter((item): item is StreamSummary => Boolean(item));
-      if (manualList.length > 0) {
-        return manualList.slice(0, 2);
-      }
-    }
-    return pool.slice(0, 2);
-  }, [allStreams, featureFlags.streamRecommended, recommendationSettings, stream]);
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-b from-slate-50 to-white dark:from-slate-950 dark:to-slate-900" dir="rtl">
