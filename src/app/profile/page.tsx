@@ -295,6 +295,18 @@ export default function ProfilePage() {
   }, []);
 
   useEffect(() => {
+    const storedFlags = localStorage.getItem(FEATURE_FLAGS_KEY);
+    if (storedFlags) {
+      try {
+        const parsed = JSON.parse(storedFlags) as Partial<typeof featureFlags>;
+        setFeatureFlags((prev) => ({ ...prev, ...parsed }));
+      } catch (error) {
+        console.error('Failed to parse feature flags:', error);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
     const fetchStreams = async () => {
       try {
         const response = await fetch('/api/streams?published=true');
