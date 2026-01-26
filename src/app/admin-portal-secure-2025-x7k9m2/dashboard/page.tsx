@@ -191,6 +191,33 @@ interface Category {
   parentId?: string;
 }
 
+interface FeatureFlag {
+  id: string;
+  name: string;
+  description: string;
+  enabled: boolean;
+}
+
+interface AbTestVariant {
+  name: string;
+  ratio: number;
+}
+
+interface AbTest {
+  id: string;
+  name: string;
+  description: string;
+  status: 'running' | 'paused';
+  variants: AbTestVariant[];
+}
+
+interface SiteSettings {
+  siteTitle: string;
+  heroMessage: string;
+  supportEmail: string;
+  defaultTheme: 'dark' | 'light';
+}
+
 const WEBSITE_SETTINGS_KEY = 'websiteSettings';
 
 export default function AdminDashboard() {
@@ -289,6 +316,54 @@ export default function AdminDashboard() {
   const [categoryName, setCategoryName] = useState('');
   const [categoryParentId, setCategoryParentId] = useState('');
   const [categories, setCategories] = useState<Category[]>([]);
+  const [featureFlags, setFeatureFlags] = useState<FeatureFlag[]>([
+    {
+      id: 'smart-recommendations',
+      name: 'توصيات ذكية',
+      description: 'اقتراح قنوات بناءً على سجل المشاهدة.',
+      enabled: true,
+    },
+    {
+      id: 'low-bandwidth-mode',
+      name: 'وضع الباندويث المنخفض',
+      description: 'تخفيض الجودة تلقائياً عند انخفاض الشبكة.',
+      enabled: false,
+    },
+    {
+      id: 'live-chat',
+      name: 'الدردشة المباشرة',
+      description: 'تمكين الدردشة أثناء المشاهدة.',
+      enabled: false,
+    },
+  ]);
+  const [abTests, setAbTests] = useState<AbTest[]>([
+    {
+      id: 'server-routing',
+      name: 'توزيع الخوادم الذكي',
+      description: 'اختبار موازنة جديدة بين خوادم البث.',
+      status: 'running',
+      variants: [
+        { name: 'الخطة A', ratio: 50 },
+        { name: 'الخطة B', ratio: 50 },
+      ],
+    },
+    {
+      id: 'player-ui',
+      name: 'واجهة المشغل',
+      description: 'مقارنة بين تصميمي مشغل البث.',
+      status: 'paused',
+      variants: [
+        { name: 'واجهة كلاسيكية', ratio: 70 },
+        { name: 'واجهة حديثة', ratio: 30 },
+      ],
+    },
+  ]);
+  const [siteSettings, setSiteSettings] = useState<SiteSettings>({
+    siteTitle: 'F2L Streaming',
+    heroMessage: 'أفضل بث مباشر بجودة عالية.',
+    supportEmail: 'support@f2l.local',
+    defaultTheme: 'dark',
+  });
   const [autoScalingConfig, setAutoScalingConfig] = useState({
     minServers: 2,
     maxServers: 10,
@@ -370,6 +445,22 @@ export default function AdminDashboard() {
   useEffect(() => {
     localStorage.setItem('pinnedStreams', JSON.stringify([...pinnedStreams]));
   }, [pinnedStreams]);
+
+  useEffect(() => {
+    const storedSettings = localStorage.getItem(WEBSITE_SETTINGS_KEY);
+    if (storedSettings) {
+      try {
+        const parsed = JSON.parse(storedSettings) as SiteSettings;
+        setSiteSettings(parsed);
+      } catch (error) {
+        console.error('Error parsing site settings:', error);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(WEBSITE_SETTINGS_KEY, JSON.stringify(siteSettings));
+  }, [siteSettings]);
 
   useEffect(() => {
     setStreamsPage((prev) => Math.min(prev, totalStreamPages));
@@ -1257,65 +1348,73 @@ export default function AdminDashboard() {
         const line = lines[i].trim();
         if (!line) continue;
 
-        // Parse EXTINF metadata
-        if (line.startsWith('#EXTINF:')) {
-          if (currentChannel.url) {
-            channels.push({ ...currentChannel } as PlaylistChannel);
-          }
-          currentChannel = { url: '' };
+  const handleCreateCategory = () => {
+    if (!categoryName.trim()) {
+      toast.error('أدخل اسم التصنيف');
+      return;
+    }
+    const newCategory: Category = {
+      id:
+        typeof crypto !== 'undefined' && 'randomUUID' in crypto
+          ? crypto.randomUUID()
+          : `category-${Date.now()}`,
+      name: categoryName.trim(),
+      parentId: categoryParentId || undefined,
+    };
+    setCategories((prev) => [newCategory, ...prev]);
+    setCategoryName('');
+    setCategoryParentId('');
+    toast.success('تم إضافة التصنيف');
+  };
 
-          const extinfLine = line.substring(8); // Remove #EXTINF:
-          // Split by comma - everything after the last comma is the channel name
-          const lastCommaIndex = extinfLine.lastIndexOf(',');
-          if (lastCommaIndex !== -1) {
-            const metadataPart = extinfLine.substring(0, lastCommaIndex);
-            const channelName = extinfLine.substring(lastCommaIndex + 1).trim();
-
-            // Set channel name (remove quotes if present)
-            currentChannel.channelName = channelName.replace(/^"|"$/g, '');
-
-            // Parse metadata attributes
-            const attributes = metadataPart.split(/\s+/);
-            for (const attr of attributes) {
-              if (attr.includes('=')) {
-                const [key, value] = attr.split('=');
-                const cleanKey = key.trim().toLowerCase();
-                const cleanValue = value.replace(/^"|"$/g, '').trim();
-
-                if (cleanKey === 'tvg-id') {
-                  currentChannel.channelId = cleanValue;
-                } else if (cleanKey === 'tvg-logo') {
-                  currentChannel.logo = cleanValue;
-                } else if (cleanKey === 'tvg-name') {
-                  if (!currentChannel.channelName) {
-                    currentChannel.channelName = cleanValue;
-                  }
-                } else if (cleanKey === 'group-title') {
-                  currentChannel.groupTitle = cleanValue;
-                }
-              }
-            }
-          }
-        }
-
-        // Parse stream URL
-        if (!line.startsWith('#') && line.trim()) {
-          currentChannel.url = line.trim();
-        }
-      }
+  const handleDeleteCategory = (categoryId: string) => {
+    setCategories((prev) => prev.filter((category) => category.id !== categoryId));
+    setStreams((prev) =>
+      prev.map((stream) =>
+        stream.categoryId === categoryId ? { ...stream, categoryId: null } : stream
+      )
+    );
+    toast.success('تم حذف التصنيف');
+  };
 
       // Add last channel
       if (currentChannel.url) {
         channels.push({ ...currentChannel } as PlaylistChannel);
       }
 
-      setParsedChannels(channels);
-      toast.success(`تم تحليل ${channels.length} قناة من القائمة`);
-      setLoadingChannels(false);
+  const handleMergeDuplicates = async (primaryId: string, duplicateIds: string[]) => {
+    if (duplicateIds.length === 0) return;
+    setDuplicateProcessing(true);
+    try {
+      const primaryStream = streams.find((stream) => stream.id === primaryId);
+      let priorityBase = primaryStream?.servers.length ?? 0;
+      const duplicates = streams.filter((stream) => duplicateIds.includes(stream.id));
+      const serverCreates = duplicates.flatMap((stream) =>
+        stream.servers.map((server) => ({
+          streamId: primaryId,
+          name: server.name || `الخادم ${priorityBase + 1}`,
+          url: server.url,
+          priority: priorityBase++,
+        }))
+      );
+      await Promise.all(
+        serverCreates.map((server) =>
+          fetch('/api/servers', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(server),
+          })
+        )
+      );
+      await Promise.all(
+        duplicateIds.map((id) => fetch(`/api/streams/${id}`, { method: 'DELETE' }))
+      );
+      toast.success('تم دمج التكرارات');
+      await fetchData();
     } catch (error) {
-      console.error('Error parsing playlist:', error);
-      toast.error('فشل في تحليل ملف القائمة');
-      setLoadingChannels(false);
+      toast.error('فشل دمج التكرارات');
+    } finally {
+      setDuplicateProcessing(false);
     }
   };
 
@@ -1369,6 +1468,7 @@ export default function AdminDashboard() {
       toast.error('الرجا تحديد قناة واحدة على الأقل');
       return;
     }
+  };
 
     if (!editingStream) {
       toast.error('يجب إنشاء البث أولاً قبل إضافة القنوات');
@@ -1487,48 +1587,30 @@ export default function AdminDashboard() {
     });
   };
 
-  // User operations
-  const handleCreateUser = async () => {
+  const handleQualityTest = async () => {
+    if (!qualityUrl.trim()) {
+      toast.error('أدخل رابط البث');
+      return;
+    }
+    setQualityProcessing(true);
     try {
-      const response = await fetch('/api/users', {
+      const response = await fetch('/api/admin/quality-test', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(userForm),
+        body: JSON.stringify({ url: qualityUrl }),
       });
-      if (!response.ok) throw new Error('Failed to create user');
-      toast.success('تم إنشاء المستخدم بنجاح');
-      setUserFormOpen(false);
-      resetUserForm();
-      fetchData();
-    } catch (error) {
-      toast.error('فشل في إنشاء المستخدم');
-    }
-  };
-
-  const handleUpdateUser = async () => {
-    if (!editingUser) return;
-    try {
-      const response = await fetch('/api/users', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: editingUser.id, ...userForm }),
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'فشل اختبار الجودة');
+      }
+      setQualityReport({
+        status: 'success',
+        qualityLabel: data.qualityLabel,
+        resolution: data.resolution,
+        bitrateKbps: data.bitrateKbps,
+        latencyMs: data.latencyMs,
+        bufferMs: data.bufferMs,
       });
-      if (!response.ok) throw new Error('Failed to update user');
-      toast.success('تم تحديث المستخدم بنجاح');
-      setUserFormOpen(false);
-      setEditingUser(null);
-      resetUserForm();
-      fetchData();
-    } catch (error) {
-      toast.error('فشل في تحديث المستخدم');
-    }
-  };
-
-  const handleDeleteUser = async (id: string) => {
-    try {
-      await fetch(`/api/users?id=${id}`, { method: 'DELETE' });
-      toast.success('تم حذف المستخدم بنجاح');
-      fetchData();
     } catch (error) {
       toast.error('فشل في حذف المستخدم');
     }
@@ -1544,11 +1626,9 @@ export default function AdminDashboard() {
         role: user.role,
         theme: user.theme ?? 'light',
       });
-    } else {
-      setEditingUser(null);
-      resetUserForm();
+    } finally {
+      setQualityProcessing(false);
     }
-    setUserFormOpen(true);
   };
 
   const resetUserForm = () => {
@@ -1564,77 +1644,28 @@ export default function AdminDashboard() {
   // Ad operations
   const handleCreateAd = async () => {
     try {
-      const response = await fetch('/api/ads', {
+      const response = await fetch('/api/admin/preview-info', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(adForm),
+        body: JSON.stringify({ url }),
       });
-      if (!response.ok) throw new Error('Failed to create ad');
-      toast.success('تم إنشاء الإعلان بنجاح');
-      setAdFormOpen(false);
-      resetAdForm();
-      fetchData();
-    } catch (error) {
-      toast.error('فشل في إنشاء الإعلان');
-    }
-  };
-
-  const handleUpdateAd = async () => {
-    if (!editingAd) return;
-    try {
-      const response = await fetch('/api/ads', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: editingAd.id, ...adForm }),
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'فشل جلب بيانات البث');
+      }
+      setPreviewReport({
+        status: 'success',
+        codec: data.codec,
+        resolution: data.resolution,
+        bitrateKbps: data.bitrateKbps,
+        latencyMs: data.latencyMs,
       });
-      if (!response.ok) throw new Error('Failed to update ad');
-      toast.success('تم تحديث الإعلان بنجاح');
-      setAdFormOpen(false);
-      setEditingAd(null);
-      resetAdForm();
-      fetchData();
     } catch (error) {
-      toast.error('فشل في تحديث الإعلان');
-    }
-  };
-
-  const handleDeleteAd = async (id: string) => {
-    try {
-      await fetch(`/api/ads?id=${id}`, { method: 'DELETE' });
-      toast.success('تم حذف الإعلان بنجاح');
-      fetchData();
-    } catch (error) {
-      toast.error('فشل في حذف الإعلان');
-    }
-  };
-
-  const openAdForm = (ad?: Ad) => {
-    if (ad) {
-      setEditingAd(ad);
-      setAdForm({
-        streamId: '',
-        position: ad.position,
-        title: ad.title || '',
-        imageUrl: ad.imageUrl,
-        linkUrl: ad.linkUrl || '',
-        active: ad.active,
+      setPreviewReport({
+        status: 'failed',
+        message: error instanceof Error ? error.message : 'فشل جلب بيانات البث',
       });
-    } else {
-      setEditingAd(null);
-      resetAdForm();
     }
-    setAdFormOpen(true);
-  };
-
-  const resetAdForm = () => {
-    setAdForm({
-      streamId: '',
-      position: 'home-top',
-      title: '',
-      imageUrl: '',
-      linkUrl: '',
-      active: true,
-    });
   };
 
   return (
@@ -3617,6 +3648,228 @@ export default function AdminDashboard() {
                     )}
                   </div>
                 )}
+
+                {activeTab === 'infrastructure' && (
+                  <div className="space-y-6">
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                      <Card className="bg-slate-800/50 border-slate-700">
+                        <CardHeader className="border-b border-slate-700">
+                          <CardTitle className="text-white">حالة الخوادم</CardTitle>
+                          <CardDescription className="text-slate-400">
+                            مراقبة تشغيل الخوادم الأساسية.
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent className="p-6 space-y-4">
+                          {uptimeStats.map((stat) => (
+                            <div key={stat.server} className="flex items-center justify-between text-sm">
+                              <span className="text-slate-300">{stat.server}</span>
+                              <span className="text-emerald-400">{stat.uptime}</span>
+                            </div>
+                          ))}
+                          <Button
+                            variant="outline"
+                            className="w-full border-slate-700 text-slate-300"
+                            onClick={checkAllStreamStatus}
+                            disabled={checkingStatus}
+                          >
+                            {checkingStatus ? 'جاري التحقق...' : 'إعادة فحص القنوات'}
+                          </Button>
+                        </CardContent>
+                      </Card>
+
+                      <Card className="bg-slate-800/50 border-slate-700">
+                        <CardHeader className="border-b border-slate-700">
+                          <CardTitle className="text-white">مؤشرات الأداء</CardTitle>
+                          <CardDescription className="text-slate-400">
+                            ملخص سريع لاستهلاك الموارد.
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent className="p-6 space-y-3 text-sm text-slate-300">
+                          <div className="flex items-center justify-between">
+                            <span>متوسط التحميل</span>
+                            <span className="text-blue-300">{autoScalingConfig.targetLoad}%</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span>الخوادم النشطة</span>
+                            <span className="text-slate-200">{streams.length}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span>تنبيهات اليوم</span>
+                            <span className="text-yellow-300">3</span>
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      <Card className="bg-slate-800/50 border-slate-700">
+                        <CardHeader className="border-b border-slate-700">
+                          <CardTitle className="text-white">تشغيل النسخ الاحتياطي</CardTitle>
+                          <CardDescription className="text-slate-400">
+                            إدارة دورات النسخ الاحتياطي المحلية.
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent className="p-6 space-y-3 text-sm text-slate-300">
+                          <p>آخر نسخة: {lastBackupAt ? new Date(lastBackupAt).toLocaleString('ar') : 'غير متاحة'}</p>
+                          <Button
+                            className="w-full bg-gradient-to-r from-red-600 to-red-700"
+                            onClick={() => handleExportBackup('json')}
+                            disabled={backupProcessing}
+                          >
+                            إنشاء نسخة جديدة
+                          </Button>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  </div>
+                )}
+
+                {activeTab === 'abTesting' && (
+                  <div className="space-y-6">
+                    <Card className="bg-slate-800/50 border-slate-700">
+                      <CardHeader className="border-b border-slate-700">
+                        <CardTitle className="text-white">اختبارات A/B الجارية</CardTitle>
+                        <CardDescription className="text-slate-400">
+                          راقب توزيع الترافيك بين البدائل المختلفة.
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="p-6 space-y-4">
+                        {abTests.map((test) => (
+                          <div key={test.id} className="rounded-lg border border-slate-700 p-4 space-y-3">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="text-white font-semibold">{test.name}</p>
+                                <p className="text-xs text-slate-400">{test.description}</p>
+                              </div>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="border-slate-700 text-slate-300"
+                                onClick={() =>
+                                  setAbTests((prev) =>
+                                    prev.map((item) =>
+                                      item.id === test.id
+                                        ? {
+                                            ...item,
+                                            status: item.status === 'running' ? 'paused' : 'running',
+                                          }
+                                        : item
+                                    )
+                                  )
+                                }
+                              >
+                                {test.status === 'running' ? 'إيقاف' : 'تشغيل'}
+                              </Button>
+                            </div>
+                            <div className="space-y-2 text-sm text-slate-300">
+                              {test.variants.map((variant) => (
+                                <div key={variant.name} className="flex items-center justify-between">
+                                  <span>{variant.name}</span>
+                                  <span>{variant.ratio}%</span>
+                                </div>
+                              ))}
+                            </div>
+                            <p className="text-xs text-slate-400">
+                              الحالة الحالية: {test.status === 'running' ? 'قيد التشغيل' : 'متوقف'}
+                            </p>
+                          </div>
+                        ))}
+                      </CardContent>
+                    </Card>
+                  </div>
+                )}
+
+                {activeTab === 'featureFlags' && (
+                  <div className="space-y-6">
+                    <Card className="bg-slate-800/50 border-slate-700">
+                      <CardHeader className="border-b border-slate-700">
+                        <CardTitle className="text-white">ميزات الموقع</CardTitle>
+                        <CardDescription className="text-slate-400">
+                          فعّل أو عطّل الميزات التجريبية بسرعة.
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="p-6 space-y-4">
+                        {featureFlags.map((flag) => (
+                          <div key={flag.id} className="flex items-center justify-between rounded-lg border border-slate-700 p-4">
+                            <div>
+                              <p className="text-white font-medium">{flag.name}</p>
+                              <p className="text-xs text-slate-400">{flag.description}</p>
+                            </div>
+                            <Switch
+                              checked={flag.enabled}
+                              onCheckedChange={(checked) =>
+                                setFeatureFlags((prev) =>
+                                  prev.map((item) =>
+                                    item.id === flag.id ? { ...item, enabled: checked } : item
+                                  )
+                                )
+                              }
+                            />
+                          </div>
+                        ))}
+                      </CardContent>
+                    </Card>
+                  </div>
+                )}
+
+                {activeTab === 'siteSettings' && (
+                  <div className="space-y-6">
+                    <Card className="bg-slate-800/50 border-slate-700">
+                      <CardHeader className="border-b border-slate-700">
+                        <CardTitle className="text-white">إعدادات الواجهة</CardTitle>
+                        <CardDescription className="text-slate-400">
+                          إعدادات عامة تظهر في الواجهة الرئيسية.
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="p-6 space-y-4">
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label className="text-slate-300">عنوان الموقع</Label>
+                            <Input
+                              value={siteSettings.siteTitle}
+                              onChange={(e) => setSiteSettings({ ...siteSettings, siteTitle: e.target.value })}
+                              className="bg-slate-800 border-slate-700 text-white"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label className="text-slate-300">البريد الداعم</Label>
+                            <Input
+                              value={siteSettings.supportEmail}
+                              onChange={(e) => setSiteSettings({ ...siteSettings, supportEmail: e.target.value })}
+                              className="bg-slate-800 border-slate-700 text-white"
+                            />
+                          </div>
+                          <div className="space-y-2 lg:col-span-2">
+                            <Label className="text-slate-300">رسالة الصفحة الرئيسية</Label>
+                            <Textarea
+                              value={siteSettings.heroMessage}
+                              onChange={(e) => setSiteSettings({ ...siteSettings, heroMessage: e.target.value })}
+                              className="bg-slate-800 border-slate-700 text-white min-h-[120px]"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label className="text-slate-300">الثيم الافتراضي</Label>
+                            <select
+                              value={siteSettings.defaultTheme}
+                              onChange={(e) =>
+                                setSiteSettings({
+                                  ...siteSettings,
+                                  defaultTheme: e.target.value as SiteSettings['defaultTheme'],
+                                })
+                              }
+                              className="w-full bg-slate-800 border border-slate-700 text-white rounded-md p-2"
+                            >
+                              <option value="dark">داكن</option>
+                              <option value="light">فاتح</option>
+                            </select>
+                          </div>
+                        </div>
+                        <p className="text-xs text-slate-500">
+                          يتم حفظ الإعدادات محلياً على هذا المتصفح.
+                        </p>
+                      </CardContent>
+                    </Card>
+                  </div>
+                )}
+
                 {/* Users Tab */}
                 {activeTab === 'users' && (
                   <div className="space-y-6">
