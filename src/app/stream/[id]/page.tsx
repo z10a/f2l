@@ -109,6 +109,34 @@ export default function StreamPage({ params }: { params: { id: string } }) {
   }, []);
 
   useEffect(() => {
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === FEATURE_FLAGS_KEY && event.newValue) {
+        try {
+          const parsed = JSON.parse(event.newValue) as Partial<typeof featureFlags>;
+          setFeatureFlags((prev) => ({ ...prev, ...parsed }));
+        } catch (error) {
+          console.error('Failed to parse feature flags:', error);
+        }
+      }
+      if (event.key === STREAM_RECOMMENDATIONS_KEY && event.newValue) {
+        try {
+          const parsed = JSON.parse(event.newValue) as StreamRecommendationSettings;
+          if (parsed.mode === 'manual' || parsed.mode === 'auto') {
+            setRecommendationSettings({
+              mode: parsed.mode,
+              manualIds: Array.isArray(parsed.manualIds) ? parsed.manualIds : [],
+            });
+          }
+        } catch (error) {
+          console.error('Failed to parse stream recommendations:', error);
+        }
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, []);
+
+  useEffect(() => {
     const storedRecommendations = localStorage.getItem(STREAM_RECOMMENDATIONS_KEY);
     if (storedRecommendations) {
       try {
@@ -248,7 +276,7 @@ export default function StreamPage({ params }: { params: { id: string } }) {
   const sidebarAds = stream.ads.filter((ad) => ad.position === 'stream-sidebar');
 
   const recommendedStreams = useMemo(() => {
-    if (!featureFlags.streamRecommended) return [];
+    if (!featureFlags.streamRecommended || !stream) return [];
     const pool = allStreams.filter((item) => item.id !== stream.id);
     if (recommendationSettings.mode === 'manual' && recommendationSettings.manualIds.length > 0) {
       const manualList = recommendationSettings.manualIds
@@ -259,7 +287,7 @@ export default function StreamPage({ params }: { params: { id: string } }) {
       }
     }
     return pool.slice(0, 2);
-  }, [allStreams, featureFlags.streamRecommended, recommendationSettings, stream.id]);
+  }, [allStreams, featureFlags.streamRecommended, recommendationSettings, stream]);
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-b from-slate-50 to-white dark:from-slate-950 dark:to-slate-900" dir="rtl">

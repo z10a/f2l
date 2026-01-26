@@ -243,6 +243,8 @@ interface SiteSettings {
   heroMessage: string;
   supportEmail: string;
   defaultTheme: 'dark' | 'light';
+  faviconUrl?: string;
+  appIconUrl?: string;
 }
 
 const WEBSITE_SETTINGS_KEY = 'websiteSettings';
@@ -405,6 +407,8 @@ export default function AdminDashboard() {
     heroMessage: 'أفضل بث مباشر بجودة عالية.',
     supportEmail: 'support@f2l.local',
     defaultTheme: 'dark',
+    faviconUrl: '',
+    appIconUrl: '',
   });
   const [autoScalingConfig, setAutoScalingConfig] = useState({
     minServers: 2,
@@ -4080,10 +4084,28 @@ export default function AdminDashboard() {
                             />
                           </div>
                           <div className="space-y-2">
+                            <Label className="text-slate-300">أيقونة الموقع (Favicon)</Label>
+                            <Input
+                              value={siteSettings.faviconUrl ?? ''}
+                              onChange={(e) => setSiteSettings({ ...siteSettings, faviconUrl: e.target.value })}
+                              placeholder="https://example.com/favicon.ico"
+                              className="bg-slate-800 border-slate-700 text-white"
+                            />
+                          </div>
+                          <div className="space-y-2">
                             <Label className="text-slate-300">البريد الداعم</Label>
                             <Input
                               value={siteSettings.supportEmail}
                               onChange={(e) => setSiteSettings({ ...siteSettings, supportEmail: e.target.value })}
+                              className="bg-slate-800 border-slate-700 text-white"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label className="text-slate-300">أيقونة الصفحة</Label>
+                            <Input
+                              value={siteSettings.appIconUrl ?? ''}
+                              onChange={(e) => setSiteSettings({ ...siteSettings, appIconUrl: e.target.value })}
+                              placeholder="https://example.com/logo.png"
                               className="bg-slate-800 border-slate-700 text-white"
                             />
                           </div>

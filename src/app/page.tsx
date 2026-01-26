@@ -392,6 +392,7 @@ export default function Home() {
   const [siteSettings, setSiteSettings] = useState<{
     title?: string;
     faviconUrl?: string;
+    appIconUrl?: string;
     primaryColor?: string;
     fontName?: string;
     fontUrl?: string;
@@ -451,6 +452,29 @@ export default function Home() {
         console.error('Failed to parse pinned streams:', error);
       }
     }
+  }, []);
+
+  useEffect(() => {
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === FEATURE_FLAGS_KEY && event.newValue) {
+        try {
+          const parsed = JSON.parse(event.newValue) as Partial<typeof featureFlags>;
+          setFeatureFlags((prev) => ({ ...prev, ...parsed }));
+        } catch (error) {
+          console.error('Failed to parse feature flags:', error);
+        }
+      }
+      if (event.key === 'pinnedStreams' && event.newValue) {
+        try {
+          const parsedPins = JSON.parse(event.newValue) as string[];
+          setPinnedStreams(new Set(parsedPins));
+        } catch (error) {
+          console.error('Failed to parse pinned streams:', error);
+        }
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
   }, []);
 
   useEffect(() => {
@@ -688,22 +712,28 @@ export default function Home() {
     try {
       const parsed = JSON.parse(storedSettings) as {
         title?: string;
+        siteTitle?: string;
         faviconUrl?: string;
+        appIconUrl?: string;
         primaryColor?: string;
         fontName?: string;
         fontUrl?: string;
       };
-      setSiteSettings(parsed);
-      if (parsed.title) {
-        document.title = parsed.title;
+      const nextSettings = {
+        ...parsed,
+        title: parsed.title ?? parsed.siteTitle,
+      };
+      setSiteSettings(nextSettings);
+      if (nextSettings.title) {
+        document.title = nextSettings.title;
       }
-      if (parsed.primaryColor) {
-        document.documentElement.style.setProperty('--brand-color', parsed.primaryColor);
+      if (nextSettings.primaryColor) {
+        document.documentElement.style.setProperty('--brand-color', nextSettings.primaryColor);
       }
-      if (parsed.fontName) {
-        document.documentElement.style.fontFamily = `${parsed.fontName}, ui-sans-serif, system-ui`;
+      if (nextSettings.fontName) {
+        document.documentElement.style.fontFamily = `${nextSettings.fontName}, ui-sans-serif, system-ui`;
       }
-      if (parsed.fontUrl) {
+      if (nextSettings.fontUrl) {
         const fontStyleId = 'custom-font-style';
         let styleTag = document.getElementById(fontStyleId) as HTMLStyleElement | null;
         if (!styleTag) {
@@ -711,16 +741,16 @@ export default function Home() {
           styleTag.id = fontStyleId;
           document.head.appendChild(styleTag);
         }
-        const fontName = parsed.fontName || 'CustomFont';
+        const fontName = nextSettings.fontName || 'CustomFont';
         styleTag.textContent = `
 @font-face {
   font-family: '${fontName}';
-  src: url('${parsed.fontUrl}');
+  src: url('${nextSettings.fontUrl}');
   font-display: swap;
 }
 `;
       }
-      if (parsed.faviconUrl) {
+      if (nextSettings.faviconUrl) {
         const faviconId = 'site-favicon';
         let link = document.getElementById(faviconId) as HTMLLinkElement | null;
         if (!link) {
@@ -729,7 +759,7 @@ export default function Home() {
           link.rel = 'icon';
           document.head.appendChild(link);
         }
-        link.href = parsed.faviconUrl;
+        link.href = nextSettings.faviconUrl;
       }
     } catch (error) {
       console.error('Failed to parse site settings:', error);
@@ -1251,7 +1281,15 @@ export default function Home() {
                 className="rounded-xl p-3"
                 style={{ backgroundColor: siteSettings?.primaryColor ?? '#dc2626' }}
               >
-                <Tv className="h-6 w-6 text-white" />
+                {siteSettings?.appIconUrl ? (
+                  <img
+                    src={siteSettings.appIconUrl}
+                    alt={siteSettings.title ?? labels.title}
+                    className="h-6 w-6 object-contain"
+                  />
+                ) : (
+                  <Tv className="h-6 w-6 text-white" />
+                )}
               </div>
               <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
                 {siteSettings?.title ?? labels.title}
