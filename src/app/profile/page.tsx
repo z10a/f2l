@@ -207,50 +207,90 @@ export default function ProfilePage() {
       const parsed = JSON.parse(storedSettings) as {
         title?: string;
         faviconUrl?: string;
+        appIconUrl?: string;
         primaryColor?: string;
         fontName?: string;
         fontUrl?: string;
       };
       setSiteSettings(parsed);
-      if (parsed.title) {
-        document.title = parsed.title;
+      applySiteSettings(parsed);
+    } catch (error) {
+      console.error('Failed to parse site settings:', error);
+    }
+  }, []);
+
+  const applySiteSettings = (nextSettings: typeof siteSettings) => {
+    if (!nextSettings) return;
+    if (nextSettings.title) {
+      document.title = nextSettings.title;
+    }
+    if (nextSettings.primaryColor) {
+      document.documentElement.style.setProperty('--brand-color', nextSettings.primaryColor);
+    }
+    if (nextSettings.fontName) {
+      document.documentElement.style.fontFamily = `${nextSettings.fontName}, ui-sans-serif, system-ui`;
+    }
+    if (nextSettings.fontUrl) {
+      const fontStyleId = 'custom-font-style';
+      let styleTag = document.getElementById(fontStyleId) as HTMLStyleElement | null;
+      if (!styleTag) {
+        styleTag = document.createElement('style');
+        styleTag.id = fontStyleId;
+        document.head.appendChild(styleTag);
       }
-      if (parsed.primaryColor) {
-        document.documentElement.style.setProperty('--brand-color', parsed.primaryColor);
-      }
-      if (parsed.fontName) {
-        document.documentElement.style.fontFamily = `${parsed.fontName}, ui-sans-serif, system-ui`;
-      }
-      if (parsed.fontUrl) {
-        const fontStyleId = 'custom-font-style';
-        let styleTag = document.getElementById(fontStyleId) as HTMLStyleElement | null;
-        if (!styleTag) {
-          styleTag = document.createElement('style');
-          styleTag.id = fontStyleId;
-          document.head.appendChild(styleTag);
-        }
-        const fontName = parsed.fontName || 'CustomFont';
-        styleTag.textContent = `
+      const fontName = nextSettings.fontName || 'CustomFont';
+      styleTag.textContent = `
 @font-face {
   font-family: '${fontName}';
-  src: url('${parsed.fontUrl}');
+  src: url('${nextSettings.fontUrl}');
   font-display: swap;
 }
 `;
+    }
+    if (nextSettings.faviconUrl) {
+      const faviconId = 'site-favicon';
+      let link = document.getElementById(faviconId) as HTMLLinkElement | null;
+      if (!link) {
+        link = document.createElement('link');
+        link.id = faviconId;
+        link.rel = 'icon';
+        document.head.appendChild(link);
       }
-      if (parsed.faviconUrl) {
-        const faviconId = 'site-favicon';
-        let link = document.getElementById(faviconId) as HTMLLinkElement | null;
-        if (!link) {
-          link = document.createElement('link');
-          link.id = faviconId;
-          link.rel = 'icon';
-          document.head.appendChild(link);
-        }
-        link.href = parsed.faviconUrl;
+      link.href = nextSettings.faviconUrl;
+    }
+  };
+
+  useEffect(() => {
+    const handleFeatureFlagsUpdate = (event: Event) => {
+      const customEvent = event as CustomEvent<Partial<typeof featureFlags>>;
+      if (customEvent.detail) {
+        setFeatureFlags((prev) => ({ ...prev, ...customEvent.detail }));
       }
-    } catch (error) {
-      console.error('Failed to parse site settings:', error);
+    };
+    const handleSiteSettingsUpdate = (event: Event) => {
+      const customEvent = event as CustomEvent<typeof siteSettings>;
+      if (customEvent.detail) {
+        setSiteSettings(customEvent.detail);
+        applySiteSettings(customEvent.detail);
+      }
+    };
+    window.addEventListener('feature-flags:update', handleFeatureFlagsUpdate);
+    window.addEventListener('site-settings:update', handleSiteSettingsUpdate);
+    return () => {
+      window.removeEventListener('feature-flags:update', handleFeatureFlagsUpdate);
+      window.removeEventListener('site-settings:update', handleSiteSettingsUpdate);
+    };
+  }, []);
+
+  useEffect(() => {
+    const storedFlags = localStorage.getItem(FEATURE_FLAGS_KEY);
+    if (storedFlags) {
+      try {
+        const parsed = JSON.parse(storedFlags) as Partial<typeof featureFlags>;
+        setFeatureFlags((prev) => ({ ...prev, ...parsed }));
+      } catch (error) {
+        console.error('Failed to parse feature flags:', error);
+      }
     }
   }, []);
 

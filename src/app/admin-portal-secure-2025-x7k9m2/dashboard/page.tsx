@@ -651,6 +651,9 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     localStorage.setItem('pinnedStreams', JSON.stringify([...pinnedStreams]));
+    window.dispatchEvent(
+      new CustomEvent('pinned-streams:update', { detail: [...pinnedStreams] })
+    );
   }, [pinnedStreams]);
 
   useEffect(() => {
@@ -679,6 +682,7 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     localStorage.setItem(FEATURE_FLAGS_KEY, JSON.stringify(featureFlags));
+    window.dispatchEvent(new CustomEvent('feature-flags:update', { detail: featureFlags }));
   }, [featureFlags]);
 
   useEffect(() => {
@@ -700,10 +704,14 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     localStorage.setItem(STREAM_RECOMMENDATIONS_KEY, JSON.stringify(streamRecommendations));
+    window.dispatchEvent(
+      new CustomEvent('stream-recommendations:update', { detail: streamRecommendations })
+    );
   }, [streamRecommendations]);
 
   useEffect(() => {
     localStorage.setItem(WEBSITE_SETTINGS_KEY, JSON.stringify(siteSettings));
+    window.dispatchEvent(new CustomEvent('site-settings:update', { detail: siteSettings }));
   }, [siteSettings]);
 
   useEffect(() => {

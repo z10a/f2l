@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, useRef } from 'react';
 import Link from 'next/link';
+import { useParams } from 'next/navigation';
 import { Play, Tv, ArrowRight, Home, Server, Zap, AlertCircle, Info } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -52,8 +53,12 @@ interface StreamRecommendationSettings {
 
 const FEATURE_FLAGS_KEY = 'websiteFeatureFlags';
 const STREAM_RECOMMENDATIONS_KEY = 'streamRecommendations';
+const DEMO_STREAM_ID = 'demo-live';
+const DEMO_PLAYLIST_URL = 'https://iptv-org.github.io/iptv/categories/interactive.m3u';
 
-export default function StreamPage({ params }: { params: { id: string } }) {
+export default function StreamPage() {
+  const params = useParams<{ id: string }>();
+  const streamId = params?.id ?? '';
   const [stream, setStream] = useState<StreamData | null>(null);
   const [selectedServer, setSelectedServer] = useState<Server | null>(null);
   const [loading, setLoading] = useState(true);
@@ -75,8 +80,9 @@ export default function StreamPage({ params }: { params: { id: string } }) {
   const [allStreams, setAllStreams] = useState<StreamSummary[]>([]);
 
   useEffect(() => {
-    fetchStream();
-  }, [params.id]);
+    if (!streamId) return;
+    fetchStream(streamId);
+  }, [streamId]);
 
   useEffect(() => {
     if (stream && stream.servers.length > 0 && !selectedServer) {
@@ -132,8 +138,29 @@ export default function StreamPage({ params }: { params: { id: string } }) {
         }
       }
     };
+    const handleFeatureFlagsUpdate = (event: Event) => {
+      const customEvent = event as CustomEvent<Partial<typeof featureFlags>>;
+      if (customEvent.detail) {
+        setFeatureFlags((prev) => ({ ...prev, ...customEvent.detail }));
+      }
+    };
+    const handleRecommendationUpdate = (event: Event) => {
+      const customEvent = event as CustomEvent<StreamRecommendationSettings>;
+      if (customEvent.detail) {
+        setRecommendationSettings({
+          mode: customEvent.detail.mode,
+          manualIds: Array.isArray(customEvent.detail.manualIds) ? customEvent.detail.manualIds : [],
+        });
+      }
+    };
     window.addEventListener('storage', handleStorage);
-    return () => window.removeEventListener('storage', handleStorage);
+    window.addEventListener('feature-flags:update', handleFeatureFlagsUpdate);
+    window.addEventListener('stream-recommendations:update', handleRecommendationUpdate);
+    return () => {
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('feature-flags:update', handleFeatureFlagsUpdate);
+      window.removeEventListener('stream-recommendations:update', handleRecommendationUpdate);
+    };
   }, []);
 
   useEffect(() => {
@@ -169,9 +196,49 @@ export default function StreamPage({ params }: { params: { id: string } }) {
     fetchStreams();
   }, [featureFlags.streamRecommended]);
 
-  const fetchStream = async () => {
+  const buildDemoStream = async (): Promise<StreamData | null> => {
     try {
-      const response = await fetch(`/api/streams/${params.id}`);
+      const response = await fetch(DEMO_PLAYLIST_URL);
+      if (!response.ok) return null;
+      const playlist = await response.text();
+      const lines = playlist.split('\n').map((line) => line.trim()).filter(Boolean);
+      const servers: Server[] = [];
+      for (let i = 0; i < lines.length; i += 1) {
+        const line = lines[i];
+        if (line.startsWith('#EXTINF')) {
+          const nextLine = lines[i + 1];
+          if (!nextLine || nextLine.startsWith('#')) continue;
+          const nameMatch = line.match(/,(.*)$/);
+          const channelName = nameMatch?.[1]?.trim() || `قناة ${servers.length + 1}`;
+          servers.push({
+            id: crypto.randomUUID(),
+            name: channelName,
+            url: nextLine,
+            priority: servers.length,
+            channelName,
+          });
+        }
+        if (servers.length >= 3) break;
+      }
+      if (servers.length === 0) return null;
+      return {
+        id: DEMO_STREAM_ID,
+        title: 'قناة تفاعلية مباشرة',
+        description: 'بث مباشر تجريبي من قائمة IPTV التفاعلية.',
+        thumbnail: 'https://placehold.co/1280x720/png?text=Interactive+Live',
+        published: true,
+        servers,
+        ads: [],
+      };
+    } catch (error) {
+      console.error('Error building demo stream:', error);
+      return null;
+    }
+  };
+
+  const fetchStream = async (id: string) => {
+    try {
+      const response = await fetch(`/api/streams/${id}`);
       if (!response.ok) {
         throw new Error('Stream not found');
       }
@@ -179,6 +246,14 @@ export default function StreamPage({ params }: { params: { id: string } }) {
       setStream(data);
     } catch (error) {
       console.error('Error fetching stream:', error);
+      if (id === DEMO_STREAM_ID) {
+        const demoStream = await buildDemoStream();
+        if (demoStream) {
+          setStream(demoStream);
+          setError(null);
+          return;
+        }
+      }
       setError('فشل في تحميل البث المباشر');
       toast.error('فشل في تحميل البث المباشر');
     } finally {
