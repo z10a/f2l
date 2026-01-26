@@ -34,6 +34,7 @@ const UI_THEME_KEY = 'uiTheme';
 const RECENTLY_WATCHED_KEY = 'recentlyWatchedStreams';
 const USER_PROFILE_KEY = 'userProfile';
 const WEBSITE_SETTINGS_KEY = 'websiteSettings';
+const FEATURE_FLAGS_KEY = 'websiteFeatureFlags';
 
 const COPY = {
   ar: {
@@ -115,6 +116,13 @@ export default function ProfilePage() {
     fontName?: string;
     fontUrl?: string;
   } | null>(null);
+  const [featureFlags, setFeatureFlags] = useState({
+    profileAccount: true,
+    profilePreferences: true,
+    profileRecommendations: true,
+    profileFavorites: true,
+    profileHistory: true,
+  });
 
   const labels = useMemo(() => COPY[language], [language]);
   const dir = language === 'ar' ? 'rtl' : 'ltr';
@@ -247,6 +255,18 @@ export default function ProfilePage() {
   }, []);
 
   useEffect(() => {
+    const storedFlags = localStorage.getItem(FEATURE_FLAGS_KEY);
+    if (storedFlags) {
+      try {
+        const parsed = JSON.parse(storedFlags) as Partial<typeof featureFlags>;
+        setFeatureFlags((prev) => ({ ...prev, ...parsed }));
+      } catch (error) {
+        console.error('Failed to parse feature flags:', error);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
     const fetchStreams = async () => {
       try {
         const response = await fetch('/api/streams?published=true');
@@ -375,278 +395,292 @@ export default function ProfilePage() {
       </header>
 
       <main className="container mx-auto px-4 py-8">
-        <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
-          <Card className="border-slate-200 dark:border-slate-800">
-            <CardHeader>
-              <CardTitle className="text-lg">{labels.profileInfo}</CardTitle>
-              <CardDescription>{labels.subtitle}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="h-16 w-16 overflow-hidden rounded-full border border-slate-200 bg-slate-100 dark:border-slate-700 dark:bg-slate-800">
-                    {avatarDataUrl ? (
-                      <img src={avatarDataUrl} alt={displayName || 'Avatar'} className="h-full w-full object-cover" />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center text-slate-400">
-                        <UserCircle className="h-10 w-10" />
+        {(featureFlags.profileAccount || featureFlags.profilePreferences) && (
+          <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
+            {featureFlags.profileAccount && (
+              <Card className="border-slate-200 dark:border-slate-800">
+                <CardHeader>
+                  <CardTitle className="text-lg">{labels.profileInfo}</CardTitle>
+                  <CardDescription>{labels.subtitle}</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className="h-16 w-16 overflow-hidden rounded-full border border-slate-200 bg-slate-100 dark:border-slate-700 dark:bg-slate-800">
+                        {avatarDataUrl ? (
+                          <img src={avatarDataUrl} alt={displayName || 'Avatar'} className="h-full w-full object-cover" />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center text-slate-400">
+                            <UserCircle className="h-10 w-10" />
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">{labels.avatar}</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                      {language === 'ar' ? 'قم برفع صورة شخصية تظهر في أعلى الموقع.' : 'Upload a photo for your site avatar.'}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Label className="sr-only" htmlFor="avatarUpload">
-                    {labels.avatar}
-                  </Label>
-                  <Input id="avatarUpload" type="file" accept="image/*" onChange={handleAvatarChange} />
-                  {avatarDataUrl && (
-                    <Button type="button" variant="outline" size="sm" onClick={handleAvatarRemove}>
-                      {labels.removeAvatar}
-                    </Button>
-                  )}
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="displayName">{labels.displayName}</Label>
-                <Input
-                  id="displayName"
-                  placeholder={language === 'ar' ? 'اسم المستخدم' : 'Display name'}
-                  value={displayName}
-                  onChange={(event) => setDisplayName(event.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="email">{labels.email}</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="name@email.com"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                />
-              </div>
-              <Button className="w-full" onClick={handleProfileUpdate}>
-                {labels.updateProfile}
-              </Button>
-            </CardContent>
-          </Card>
-
-          <Card className="border-slate-200 dark:border-slate-800">
-            <CardHeader>
-              <CardTitle className="text-lg">{labels.preferences}</CardTitle>
-              <CardDescription>{labels.subtitle}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-800">
-                <span className="flex items-center gap-2 text-slate-600 dark:text-slate-300">
-                  <Languages className="h-4 w-4" />
-                  {labels.language}
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setLanguage((prev) => (prev === 'ar' ? 'en' : 'ar'))}
-                >
-                  {language === 'ar' ? 'English' : 'العربية'}
-                </Button>
-              </div>
-              <div className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-800">
-                <span className="flex items-center gap-2 text-slate-600 dark:text-slate-300">
-                  {theme === 'dark' ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
-                  {labels.theme}
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))}
-                >
-                  {theme === 'dark' ? labels.light : labels.dark}
-                </Button>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="rounded-lg border border-slate-200 p-3 text-sm text-slate-600 dark:border-slate-800 dark:text-slate-300">
-                  <div className="flex items-center gap-2 font-semibold">
-                    <Heart className="h-4 w-4 text-red-500" />
-                    {labels.favorites}
-                  </div>
-                  <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                    {language === 'ar' ? 'إدارة قائمة القنوات المفضلة.' : 'Manage your favorite channels list.'}
-                  </p>
-                </div>
-                <div className="rounded-lg border border-slate-200 p-3 text-sm text-slate-600 dark:border-slate-800 dark:text-slate-300">
-                  <div className="flex items-center gap-2 font-semibold">
-                    <History className="h-4 w-4 text-amber-500" />
-                    {labels.history}
-                  </div>
-                  <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                    {language === 'ar' ? 'عرض آخر القنوات التي شاهدتها.' : 'Review your recent watch history.'}
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="mt-8 grid gap-6 lg:grid-cols-2">
-          <Card className="border-slate-200 dark:border-slate-800">
-            <CardHeader>
-              <CardTitle className="text-lg">{labels.favoritesSectionTitle}</CardTitle>
-              <CardDescription>{labels.favorites}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {favoritePreviewLists.length === 0 ? (
-                <p className="text-sm text-slate-500 dark:text-slate-400">{labels.favoritesEmpty}</p>
-              ) : (
-                <div className="space-y-4">
-                  {favoritePreviewLists.map((list) => (
-                    <div key={list.id} className="rounded-lg border border-slate-200 p-3 dark:border-slate-800">
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">{list.name}</p>
-                        <span className="text-xs text-slate-500 dark:text-slate-400">
-                          {language === 'ar' ? `${list.items.length} قناة` : `${list.items.length} channels`}
-                        </span>
-                      </div>
-                      <div className="mt-3 grid grid-cols-4 gap-2">
-                        {list.previews.map((stream) => (
-                          <Link key={stream.id} href={`/stream/${stream.id}`} className="group">
-                            <div className="overflow-hidden rounded-md border border-slate-200 dark:border-slate-800">
-                              {stream.thumbnail ? (
-                                <img src={stream.thumbnail} alt={stream.title} className="h-16 w-full object-cover transition group-hover:scale-105" />
-                              ) : (
-                                <div className="h-16 w-full bg-slate-100 dark:bg-slate-800" />
-                              )}
-                            </div>
-                          </Link>
-                        ))}
+                      <div>
+                        <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">{labels.avatar}</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          {language === 'ar' ? 'قم برفع صورة شخصية تظهر في أعلى الموقع.' : 'Upload a photo for your site avatar.'}
+                        </p>
                       </div>
                     </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Label className="sr-only" htmlFor="avatarUpload">
+                        {labels.avatar}
+                      </Label>
+                      <Input id="avatarUpload" type="file" accept="image/*" onChange={handleAvatarChange} />
+                      {avatarDataUrl && (
+                        <Button type="button" variant="outline" size="sm" onClick={handleAvatarRemove}>
+                          {labels.removeAvatar}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="displayName">{labels.displayName}</Label>
+                    <Input
+                      id="displayName"
+                      placeholder={language === 'ar' ? 'اسم المستخدم' : 'Display name'}
+                      value={displayName}
+                      onChange={(event) => setDisplayName(event.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="email">{labels.email}</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder="name@email.com"
+                      value={email}
+                      onChange={(event) => setEmail(event.target.value)}
+                    />
+                  </div>
+                  <Button className="w-full" onClick={handleProfileUpdate}>
+                    {labels.updateProfile}
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
 
-          <Card className="border-slate-200 dark:border-slate-800">
-            <CardHeader>
-              <CardTitle className="text-lg">{labels.historySectionTitle}</CardTitle>
-              <CardDescription>{labels.history}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {recentlyWatched.length === 0 ? (
-                <p className="text-sm text-slate-500 dark:text-slate-400">{labels.historyEmpty}</p>
-              ) : (
-                <div className="space-y-3">
-                  {recentlyWatched.slice(0, 6).map((entry) => {
-                    const stream = streams.find((item) => item.id === entry.streamId);
-                    return (
-                      <Link
-                        key={entry.streamId}
-                        href={`/stream/${entry.streamId}`}
-                        className="flex items-center gap-3 rounded-lg border border-slate-200 p-2 text-sm text-slate-700 hover:border-red-400 dark:border-slate-800 dark:text-slate-200"
-                      >
-                        {stream?.thumbnail ? (
-                          <img src={stream.thumbnail} alt={stream.title} className="h-12 w-16 rounded-md object-cover" />
-                        ) : (
-                          <div className="h-12 w-16 rounded-md bg-slate-100 dark:bg-slate-800" />
-                        )}
-                        <div>
-                          <p className="font-semibold line-clamp-1">{entry.title}</p>
-                          <p className="text-xs text-slate-500 dark:text-slate-400">
-                            {new Date(entry.lastWatchedAt).toLocaleDateString(language === 'ar' ? 'ar' : 'en')}
-                          </p>
-                        </div>
-                      </Link>
-                    );
-                  })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+            {featureFlags.profilePreferences && (
+              <Card className="border-slate-200 dark:border-slate-800">
+                <CardHeader>
+                  <CardTitle className="text-lg">{labels.preferences}</CardTitle>
+                  <CardDescription>{labels.subtitle}</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-800">
+                    <span className="flex items-center gap-2 text-slate-600 dark:text-slate-300">
+                      <Languages className="h-4 w-4" />
+                      {labels.language}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setLanguage((prev) => (prev === 'ar' ? 'en' : 'ar'))}
+                    >
+                      {language === 'ar' ? 'English' : 'العربية'}
+                    </Button>
+                  </div>
+                  <div className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-800">
+                    <span className="flex items-center gap-2 text-slate-600 dark:text-slate-300">
+                      {theme === 'dark' ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
+                      {labels.theme}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))}
+                    >
+                      {theme === 'dark' ? labels.light : labels.dark}
+                    </Button>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-lg border border-slate-200 p-3 text-sm text-slate-600 dark:border-slate-800 dark:text-slate-300">
+                      <div className="flex items-center gap-2 font-semibold">
+                        <Heart className="h-4 w-4 text-red-500" />
+                        {labels.favorites}
+                      </div>
+                      <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                        {language === 'ar' ? 'إدارة قائمة القنوات المفضلة.' : 'Manage your favorite channels list.'}
+                      </p>
+                    </div>
+                    <div className="rounded-lg border border-slate-200 p-3 text-sm text-slate-600 dark:border-slate-800 dark:text-slate-300">
+                      <div className="flex items-center gap-2 font-semibold">
+                        <History className="h-4 w-4 text-amber-500" />
+                        {labels.history}
+                      </div>
+                      <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                        {language === 'ar' ? 'عرض آخر القنوات التي شاهدتها.' : 'Review your recent watch history.'}
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        )}
 
-        <section className="mt-10 space-y-6">
-          <h2 className="text-xl font-bold text-slate-900 dark:text-white">{labels.recommendations}</h2>
-
-          {channelsLikeThis.length === 0 && popularNow.length === 0 && trendingNow.length === 0 ? (
-            <Card className="border-dashed border-slate-200 text-center text-sm text-slate-500 dark:border-slate-800 dark:text-slate-400">
-              <CardContent className="py-10">{labels.emptyRecommendations}</CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-6">
-              {channelsLikeThis.length > 0 && latestWatchedStream && (
-                <Card className="border-slate-200 dark:border-slate-800">
-                  <CardHeader>
-                    <CardTitle className="text-lg">{labels.similarChannels}</CardTitle>
-                    <CardDescription>{labels.basedOn(latestWatchedStream.title)}</CardDescription>
-                  </CardHeader>
-                  <CardContent className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                    {channelsLikeThis.map((stream) => (
-                      <Link key={stream.id} href={`/stream/${stream.id}`} className="rounded-xl border border-slate-200 p-3 hover:border-red-400 dark:border-slate-800">
-                        <div className="flex items-center gap-3">
-                          {stream.thumbnail ? (
-                            <img src={stream.thumbnail} alt={stream.title} className="h-14 w-20 rounded-lg object-cover" />
-                          ) : (
-                            <div className="h-14 w-20 rounded-lg bg-slate-200 dark:bg-slate-800" />
-                          )}
-                          <div>
-                            <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 line-clamp-1">{stream.title}</p>
-                            <p className="text-xs text-slate-500 line-clamp-1">{stream.description ?? ''}</p>
+        {(featureFlags.profileFavorites || featureFlags.profileHistory) && (
+          <div className="mt-8 grid gap-6 lg:grid-cols-2">
+            {featureFlags.profileFavorites && (
+              <Card className="border-slate-200 dark:border-slate-800">
+                <CardHeader>
+                  <CardTitle className="text-lg">{labels.favoritesSectionTitle}</CardTitle>
+                  <CardDescription>{labels.favorites}</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {favoritePreviewLists.length === 0 ? (
+                    <p className="text-sm text-slate-500 dark:text-slate-400">{labels.favoritesEmpty}</p>
+                  ) : (
+                    <div className="space-y-4">
+                      {favoritePreviewLists.map((list) => (
+                        <div key={list.id} className="rounded-lg border border-slate-200 p-3 dark:border-slate-800">
+                          <div className="flex items-center justify-between">
+                            <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">{list.name}</p>
+                            <span className="text-xs text-slate-500 dark:text-slate-400">
+                              {language === 'ar' ? `${list.items.length} قناة` : `${list.items.length} channels`}
+                            </span>
+                          </div>
+                          <div className="mt-3 grid grid-cols-4 gap-2">
+                            {list.previews.map((stream) => (
+                              <Link key={stream.id} href={`/stream/${stream.id}`} className="group">
+                                <div className="overflow-hidden rounded-md border border-slate-200 dark:border-slate-800">
+                                  {stream.thumbnail ? (
+                                    <img src={stream.thumbnail} alt={stream.title} className="h-16 w-full object-cover transition group-hover:scale-105" />
+                                  ) : (
+                                    <div className="h-16 w-full bg-slate-100 dark:bg-slate-800" />
+                                  )}
+                                </div>
+                              </Link>
+                            ))}
                           </div>
                         </div>
-                      </Link>
-                    ))}
-                  </CardContent>
-                </Card>
-              )}
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
 
-              {popularNow.length > 0 && (
-                <Card className="border-slate-200 dark:border-slate-800">
-                  <CardHeader>
-                    <CardTitle className="text-lg">{labels.popularNow}</CardTitle>
-                  </CardHeader>
-                  <CardContent className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
-                    {popularNow.map((stream) => (
-                      <Link key={stream.id} href={`/stream/${stream.id}`} className="group text-center">
-                        <div className="relative overflow-hidden rounded-lg border border-slate-200 shadow-sm transition group-hover:border-red-400 dark:border-slate-800">
-                          {stream.thumbnail ? (
-                            <img src={stream.thumbnail} alt={stream.title} className="h-20 w-full object-cover" />
-                          ) : (
-                            <div className="h-20 w-full bg-slate-200 dark:bg-slate-800" />
-                          )}
-                        </div>
-                        <p className="mt-2 text-xs font-semibold text-slate-700 dark:text-slate-200 line-clamp-1">{stream.title}</p>
-                      </Link>
-                    ))}
-                  </CardContent>
-                </Card>
-              )}
+            {featureFlags.profileHistory && (
+              <Card className="border-slate-200 dark:border-slate-800">
+                <CardHeader>
+                  <CardTitle className="text-lg">{labels.historySectionTitle}</CardTitle>
+                  <CardDescription>{labels.history}</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {recentlyWatched.length === 0 ? (
+                    <p className="text-sm text-slate-500 dark:text-slate-400">{labels.historyEmpty}</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {recentlyWatched.slice(0, 6).map((entry) => {
+                        const stream = streams.find((item) => item.id === entry.streamId);
+                        return (
+                          <Link
+                            key={entry.streamId}
+                            href={`/stream/${entry.streamId}`}
+                            className="flex items-center gap-3 rounded-lg border border-slate-200 p-2 text-sm text-slate-700 hover:border-red-400 dark:border-slate-800 dark:text-slate-200"
+                          >
+                            {stream?.thumbnail ? (
+                              <img src={stream.thumbnail} alt={stream.title} className="h-12 w-16 rounded-md object-cover" />
+                            ) : (
+                              <div className="h-12 w-16 rounded-md bg-slate-100 dark:bg-slate-800" />
+                            )}
+                            <div>
+                              <p className="font-semibold line-clamp-1">{entry.title}</p>
+                              <p className="text-xs text-slate-500 dark:text-slate-400">
+                                {new Date(entry.lastWatchedAt).toLocaleDateString(language === 'ar' ? 'ar' : 'en')}
+                              </p>
+                            </div>
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        )}
 
-              {trendingNow.length > 0 && (
-                <Card className="border-slate-200 dark:border-slate-800">
-                  <CardHeader>
-                    <CardTitle className="text-lg">{labels.trending}</CardTitle>
-                  </CardHeader>
-                  <CardContent className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                    {trendingNow.map((stream) => (
-                      <Link key={stream.id} href={`/stream/${stream.id}`} className="rounded-xl border border-slate-200 p-3 hover:border-red-400 dark:border-slate-800">
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">{stream.title}</span>
-                          <span className="text-xs text-slate-500">{labels.recentViews}</span>
-                        </div>
-                      </Link>
-                    ))}
-                  </CardContent>
-                </Card>
-              )}
-            </div>
-          )}
-        </section>
+        {featureFlags.profileRecommendations && (
+          <section className="mt-10 space-y-6">
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white">{labels.recommendations}</h2>
+
+            {channelsLikeThis.length === 0 && popularNow.length === 0 && trendingNow.length === 0 ? (
+              <Card className="border-dashed border-slate-200 text-center text-sm text-slate-500 dark:border-slate-800 dark:text-slate-400">
+                <CardContent className="py-10">{labels.emptyRecommendations}</CardContent>
+              </Card>
+            ) : (
+              <div className="space-y-6">
+                {channelsLikeThis.length > 0 && latestWatchedStream && (
+                  <Card className="border-slate-200 dark:border-slate-800">
+                    <CardHeader>
+                      <CardTitle className="text-lg">{labels.similarChannels}</CardTitle>
+                      <CardDescription>{labels.basedOn(latestWatchedStream.title)}</CardDescription>
+                    </CardHeader>
+                    <CardContent className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                      {channelsLikeThis.map((stream) => (
+                        <Link key={stream.id} href={`/stream/${stream.id}`} className="rounded-xl border border-slate-200 p-3 hover:border-red-400 dark:border-slate-800">
+                          <div className="flex items-center gap-3">
+                            {stream.thumbnail ? (
+                              <img src={stream.thumbnail} alt={stream.title} className="h-14 w-20 rounded-lg object-cover" />
+                            ) : (
+                              <div className="h-14 w-20 rounded-lg bg-slate-200 dark:bg-slate-800" />
+                            )}
+                            <div>
+                              <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 line-clamp-1">{stream.title}</p>
+                              <p className="text-xs text-slate-500 line-clamp-1">{stream.description ?? ''}</p>
+                            </div>
+                          </div>
+                        </Link>
+                      ))}
+                    </CardContent>
+                  </Card>
+                )}
+
+                {popularNow.length > 0 && (
+                  <Card className="border-slate-200 dark:border-slate-800">
+                    <CardHeader>
+                      <CardTitle className="text-lg">{labels.popularNow}</CardTitle>
+                    </CardHeader>
+                    <CardContent className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
+                      {popularNow.map((stream) => (
+                        <Link key={stream.id} href={`/stream/${stream.id}`} className="group text-center">
+                          <div className="relative overflow-hidden rounded-lg border border-slate-200 shadow-sm transition group-hover:border-red-400 dark:border-slate-800">
+                            {stream.thumbnail ? (
+                              <img src={stream.thumbnail} alt={stream.title} className="h-20 w-full object-cover" />
+                            ) : (
+                              <div className="h-20 w-full bg-slate-200 dark:bg-slate-800" />
+                            )}
+                          </div>
+                          <p className="mt-2 text-xs font-semibold text-slate-700 dark:text-slate-200 line-clamp-1">{stream.title}</p>
+                        </Link>
+                      ))}
+                    </CardContent>
+                  </Card>
+                )}
+
+                {trendingNow.length > 0 && (
+                  <Card className="border-slate-200 dark:border-slate-800">
+                    <CardHeader>
+                      <CardTitle className="text-lg">{labels.trending}</CardTitle>
+                    </CardHeader>
+                    <CardContent className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                      {trendingNow.map((stream) => (
+                        <Link key={stream.id} href={`/stream/${stream.id}`} className="rounded-xl border border-slate-200 p-3 hover:border-red-400 dark:border-slate-800">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">{stream.title}</span>
+                            <span className="text-xs text-slate-500">{labels.recentViews}</span>
+                          </div>
+                        </Link>
+                      ))}
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+            )}
+          </section>
+        )}
       </main>
     </div>
   );
