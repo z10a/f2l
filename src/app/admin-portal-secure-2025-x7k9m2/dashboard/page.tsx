@@ -1344,9 +1344,52 @@ export default function AdminDashboard() {
       const lines = content.split('\n');
       let currentChannel: Partial<PlaylistChannel> = {};
 
+      const getAttribute = (line: string, attribute: string) => {
+        const match = line.match(new RegExp(`${attribute}="(.*?)"`));
+        return match?.[1];
+      };
+
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i].trim();
         if (!line) continue;
+
+        if (line.startsWith('#EXTINF')) {
+          const [, info = '', name = ''] = line.split(/,(.+)/);
+          const durationRaw = info.split(' ')[0]?.replace('#EXTINF:', '');
+          const duration = Number(durationRaw);
+          currentChannel = {
+            channelId: getAttribute(line, 'tvg-id'),
+            channelName: getAttribute(line, 'tvg-name') || name.trim() || undefined,
+            logo: getAttribute(line, 'tvg-logo'),
+            groupTitle: getAttribute(line, 'group-title'),
+            duration: Number.isFinite(duration) ? duration : undefined,
+          };
+          continue;
+        }
+
+        if (line.startsWith('#')) {
+          continue;
+        }
+
+        currentChannel.url = line;
+        channels.push(currentChannel as PlaylistChannel);
+        currentChannel = {};
+      }
+
+      if (currentChannel.url) {
+        channels.push(currentChannel as PlaylistChannel);
+      }
+
+      setParsedChannels(channels);
+      setSelectedChannels([]);
+      toast.success(`تم تحميل ${channels.length} قناة`);
+    } catch (error) {
+      console.error('Error parsing playlist:', error);
+      toast.error('فشل في قراءة ملف القنوات');
+    } finally {
+      setLoadingChannels(false);
+    }
+  };
 
   const handleCreateCategory = () => {
     if (!categoryName.trim()) {
@@ -1376,11 +1419,6 @@ export default function AdminDashboard() {
     );
     toast.success('تم حذف التصنيف');
   };
-
-      // Add last channel
-      if (currentChannel.url) {
-        channels.push({ ...currentChannel } as PlaylistChannel);
-      }
 
   const handleMergeDuplicates = async (primaryId: string, duplicateIds: string[]) => {
     if (duplicateIds.length === 0) return;
@@ -1468,8 +1506,6 @@ export default function AdminDashboard() {
       toast.error('الرجا تحديد قناة واحدة على الأقل');
       return;
     }
-  };
-
     if (!editingStream) {
       toast.error('يجب إنشاء البث أولاً قبل إضافة القنوات');
       return;
@@ -1587,35 +1623,6 @@ export default function AdminDashboard() {
     });
   };
 
-  const handleQualityTest = async () => {
-    if (!qualityUrl.trim()) {
-      toast.error('أدخل رابط البث');
-      return;
-    }
-    setQualityProcessing(true);
-    try {
-      const response = await fetch('/api/admin/quality-test', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: qualityUrl }),
-      });
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || 'فشل اختبار الجودة');
-      }
-      setQualityReport({
-        status: 'success',
-        qualityLabel: data.qualityLabel,
-        resolution: data.resolution,
-        bitrateKbps: data.bitrateKbps,
-        latencyMs: data.latencyMs,
-        bufferMs: data.bufferMs,
-      });
-    } catch (error) {
-      toast.error('فشل في حذف المستخدم');
-    }
-  };
-
   const openUserForm = (user?: User) => {
     if (user) {
       setEditingUser(user);
@@ -1626,8 +1633,6 @@ export default function AdminDashboard() {
         role: user.role,
         theme: user.theme ?? 'light',
       });
-    } finally {
-      setQualityProcessing(false);
     }
   };
 
