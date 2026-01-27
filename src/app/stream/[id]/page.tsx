@@ -52,6 +52,7 @@ interface StreamRecommendationSettings {
 }
 
 const FEATURE_FLAGS_KEY = 'websiteFeatureFlags';
+const WEBSITE_SETTINGS_KEY = 'websiteSettings';
 const STREAM_RECOMMENDATIONS_KEY = 'streamRecommendations';
 
 export default function StreamPage() {
@@ -76,6 +77,68 @@ export default function StreamPage() {
     manualIds: [],
   });
   const [allStreams, setAllStreams] = useState<StreamSummary[]>([]);
+  const [siteSettings, setSiteSettings] = useState<{
+    title?: string;
+    siteTitle?: string;
+    faviconUrl?: string;
+    appIconUrl?: string;
+    primaryColor?: string;
+    fontName?: string;
+    fontUrl?: string;
+  } | null>(null);
+
+  const applySiteSettings = (nextSettings: {
+    title?: string;
+    siteTitle?: string;
+    faviconUrl?: string;
+    appIconUrl?: string;
+    primaryColor?: string;
+    fontName?: string;
+    fontUrl?: string;
+  }) => {
+    const normalized = {
+      ...nextSettings,
+      title: nextSettings.title ?? nextSettings.siteTitle,
+    };
+    setSiteSettings(normalized);
+    if (normalized.title) {
+      document.title = normalized.title;
+    }
+    if (normalized.primaryColor) {
+      document.documentElement.style.setProperty('--brand-color', normalized.primaryColor);
+    }
+    if (normalized.fontName) {
+      document.documentElement.style.fontFamily = `${normalized.fontName}, ui-sans-serif, system-ui`;
+    }
+    if (normalized.fontUrl) {
+      const fontStyleId = 'custom-font-style';
+      let styleTag = document.getElementById(fontStyleId) as HTMLStyleElement | null;
+      if (!styleTag) {
+        styleTag = document.createElement('style');
+        styleTag.id = fontStyleId;
+        document.head.appendChild(styleTag);
+      }
+      const fontName = normalized.fontName || 'CustomFont';
+      styleTag.textContent = `
+@font-face {
+  font-family: '${fontName}';
+  src: url('${normalized.fontUrl}');
+  font-display: swap;
+}
+`;
+    }
+    if (normalized.faviconUrl) {
+      const faviconId = 'site-favicon';
+      let link = document.getElementById(faviconId) as HTMLLinkElement | null;
+      if (!link) {
+        link = document.createElement('link');
+        link.id = faviconId;
+        link.rel = 'icon';
+        document.head.appendChild(link);
+      }
+      link.href = normalized.faviconUrl;
+    }
+  };
 
   useEffect(() => {
     if (!streamId) return;
@@ -122,6 +185,22 @@ export default function StreamPage() {
           console.error('Failed to parse feature flags:', error);
         }
       }
+      if (event.key === WEBSITE_SETTINGS_KEY && event.newValue) {
+        try {
+          const parsed = JSON.parse(event.newValue) as {
+            title?: string;
+            siteTitle?: string;
+            faviconUrl?: string;
+            appIconUrl?: string;
+            primaryColor?: string;
+            fontName?: string;
+            fontUrl?: string;
+          };
+          applySiteSettings(parsed);
+        } catch (error) {
+          console.error('Failed to parse site settings:', error);
+        }
+      }
       if (event.key === STREAM_RECOMMENDATIONS_KEY && event.newValue) {
         try {
           const parsed = JSON.parse(event.newValue) as StreamRecommendationSettings;
@@ -138,6 +217,25 @@ export default function StreamPage() {
     };
     window.addEventListener('storage', handleStorage);
     return () => window.removeEventListener('storage', handleStorage);
+  }, []);
+
+  useEffect(() => {
+    const storedSettings = localStorage.getItem(WEBSITE_SETTINGS_KEY);
+    if (!storedSettings) return;
+    try {
+      const parsed = JSON.parse(storedSettings) as {
+        title?: string;
+        siteTitle?: string;
+        faviconUrl?: string;
+        appIconUrl?: string;
+        primaryColor?: string;
+        fontName?: string;
+        fontUrl?: string;
+      };
+      applySiteSettings(parsed);
+    } catch (error) {
+      console.error('Failed to parse site settings:', error);
+    }
   }, []);
 
   useEffect(() => {
@@ -304,11 +402,22 @@ export default function StreamPage() {
               <span className="font-medium">العودة</span>
             </Link>
             <div className="flex items-center gap-3">
-              <div className="bg-gradient-to-br from-red-500 to-red-700 p-2 rounded-lg">
-                <Tv className="h-5 w-5 text-white" />
+              <div
+                className="p-2 rounded-lg"
+                style={{ backgroundColor: siteSettings?.primaryColor ?? '#dc2626' }}
+              >
+                {siteSettings?.appIconUrl ? (
+                  <img
+                    src={siteSettings.appIconUrl}
+                    alt={siteSettings.title ?? 'منصة البث المباشر'}
+                    className="h-5 w-5 object-contain"
+                  />
+                ) : (
+                  <Tv className="h-5 w-5 text-white" />
+                )}
               </div>
-              <h1 className="text-lg font-bold bg-gradient-to-r from-red-600 to-red-800 bg-clip-text text-transparent">
-                منصة البث المباشر
+              <h1 className="text-lg font-bold text-slate-800 dark:text-slate-100">
+                {siteSettings?.title ?? 'منصة البث المباشر'}
               </h1>
             </div>
           </div>
