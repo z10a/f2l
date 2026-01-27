@@ -499,6 +499,17 @@ export default function Home() {
     }
   };
 
+  const loadFeatureFlags = () => {
+    const storedFlags = localStorage.getItem(FEATURE_FLAGS_KEY);
+    if (!storedFlags) return;
+    try {
+      const parsed = JSON.parse(storedFlags) as Partial<typeof featureFlags>;
+      setFeatureFlags((prev) => ({ ...prev, ...parsed }));
+    } catch (error) {
+      console.error('Failed to parse feature flags:', error);
+    }
+  };
+
   useEffect(() => {
     const storedPins = localStorage.getItem('pinnedStreams');
     if (storedPins) {
@@ -639,15 +650,22 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    const storedFlags = localStorage.getItem(FEATURE_FLAGS_KEY);
-    if (storedFlags) {
-      try {
-        const parsed = JSON.parse(storedFlags) as Partial<typeof featureFlags>;
-        setFeatureFlags((prev) => ({ ...prev, ...parsed }));
-      } catch (error) {
-        console.error('Failed to parse feature flags:', error);
+    loadFeatureFlags();
+  }, []);
+
+  useEffect(() => {
+    const handleFocus = () => loadFeatureFlags();
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        loadFeatureFlags();
       }
-    }
+    };
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, []);
 
   useEffect(() => {
