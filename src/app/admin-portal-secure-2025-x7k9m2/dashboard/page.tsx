@@ -687,6 +687,7 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     localStorage.setItem(FEATURE_FLAGS_KEY, JSON.stringify(featureFlags));
+    window.dispatchEvent(new Event('featureFlagsUpdated'));
   }, [featureFlags]);
 
   useEffect(() => {

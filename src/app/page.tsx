@@ -655,15 +655,18 @@ export default function Home() {
 
   useEffect(() => {
     const handleFocus = () => loadFeatureFlags();
+    const handleCustomUpdate = () => loadFeatureFlags();
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') {
         loadFeatureFlags();
       }
     };
     window.addEventListener('focus', handleFocus);
+    window.addEventListener('featureFlagsUpdated', handleCustomUpdate);
     document.addEventListener('visibilitychange', handleVisibility);
     return () => {
       window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('featureFlagsUpdated', handleCustomUpdate);
       document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, []);
