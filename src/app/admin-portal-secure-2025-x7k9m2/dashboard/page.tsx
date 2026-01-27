@@ -93,9 +93,9 @@ interface Ad {
   id: string;
   streamId: string | null;
   position: string;
-  title: string;
+  title: string | null;
   imageUrl: string;
-  linkUrl: string;
+  linkUrl: string | null;
   active: boolean;
   createdAt?: string;
   updatedAt?: string;
@@ -245,6 +245,10 @@ interface SiteSettings {
   defaultTheme: 'dark' | 'light';
   faviconUrl?: string;
   appIconUrl?: string;
+  primaryColor?: string;
+  fontName?: string;
+  fontUrl?: string;
+  title?: string;
 }
 
 const WEBSITE_SETTINGS_KEY = 'websiteSettings';
@@ -658,7 +662,11 @@ export default function AdminDashboard() {
     if (storedSettings) {
       try {
         const parsed = JSON.parse(storedSettings) as SiteSettings;
-        setSiteSettings(parsed);
+        setSiteSettings((prev) => ({
+          ...prev,
+          ...parsed,
+          siteTitle: parsed.siteTitle ?? parsed.title ?? prev.siteTitle,
+        }));
       } catch (error) {
         console.error('Error parsing site settings:', error);
       }
@@ -679,6 +687,7 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     localStorage.setItem(FEATURE_FLAGS_KEY, JSON.stringify(featureFlags));
+    window.dispatchEvent(new Event('featureFlagsUpdated'));
   }, [featureFlags]);
 
   useEffect(() => {
@@ -703,7 +712,10 @@ export default function AdminDashboard() {
   }, [streamRecommendations]);
 
   useEffect(() => {
-    localStorage.setItem(WEBSITE_SETTINGS_KEY, JSON.stringify(siteSettings));
+    localStorage.setItem(
+      WEBSITE_SETTINGS_KEY,
+      JSON.stringify({ ...siteSettings, title: siteSettings.siteTitle })
+    );
   }, [siteSettings]);
 
   useEffect(() => {
@@ -1818,29 +1830,123 @@ export default function AdminDashboard() {
 
   // Ad operations
   const handleCreateAd = async () => {
+    if (!adForm.imageUrl.trim() && adForm.position !== 'popunder-legal') {
+      toast.error('أدخل رابط الصورة للإعلان');
+      return;
+    }
+    if (adForm.position === 'popunder-legal' && !adForm.linkUrl.trim()) {
+      toast.error('أدخل رابط الإعلان لإعلان Popunder');
+      return;
+    }
+    if (adForm.position.startsWith('stream-') && !adForm.streamId) {
+      toast.error('اختر قناة للإعلان داخل صفحة البث');
+      return;
+    }
     try {
-      const response = await fetch('/api/admin/preview-info', {
+      const payload = {
+        ...adForm,
+        streamId: adForm.streamId || null,
+      };
+      const response = await fetch('/api/ads', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url }),
+        body: JSON.stringify(payload),
       });
       const data = await response.json();
       if (!response.ok) {
-        throw new Error(data.error || 'فشل جلب بيانات البث');
+        throw new Error(data.error || 'فشل إنشاء الإعلان');
       }
-      setPreviewReport({
-        status: 'success',
-        codec: data.codec,
-        resolution: data.resolution,
-        bitrateKbps: data.bitrateKbps,
-        latencyMs: data.latencyMs,
-      });
+      setAds((prev) => [data, ...prev]);
+      toast.success('تم إضافة الإعلان بنجاح');
+      setAdFormOpen(false);
+      resetAdForm();
     } catch (error) {
-      setPreviewReport({
-        status: 'failed',
-        message: error instanceof Error ? error.message : 'فشل جلب بيانات البث',
-      });
+      toast.error(error instanceof Error ? error.message : 'فشل إضافة الإعلان');
     }
+  };
+
+  const handleUpdateAd = async () => {
+    if (!editingAd) return;
+    if (!adForm.imageUrl.trim() && adForm.position !== 'popunder-legal') {
+      toast.error('أدخل رابط الصورة للإعلان');
+      return;
+    }
+    if (adForm.position === 'popunder-legal' && !adForm.linkUrl.trim()) {
+      toast.error('أدخل رابط الإعلان لإعلان Popunder');
+      return;
+    }
+    if (adForm.position.startsWith('stream-') && !adForm.streamId) {
+      toast.error('اختر قناة للإعلان داخل صفحة البث');
+      return;
+    }
+    try {
+      const payload = {
+        id: editingAd.id,
+        ...adForm,
+        streamId: adForm.streamId || null,
+      };
+      const response = await fetch('/api/ads', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'فشل تحديث الإعلان');
+      }
+      setAds((prev) => prev.map((ad) => (ad.id === data.id ? data : ad)));
+      toast.success('تم تحديث الإعلان بنجاح');
+      setAdFormOpen(false);
+      resetAdForm();
+      setEditingAd(null);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'فشل تحديث الإعلان');
+    }
+  };
+
+  const handleDeleteAd = async (id: string) => {
+    try {
+      const response = await fetch(`/api/ads?id=${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'فشل حذف الإعلان');
+      }
+      setAds((prev) => prev.filter((ad) => ad.id !== id));
+      toast.success('تم حذف الإعلان');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'فشل حذف الإعلان');
+    }
+  };
+
+  const openAdForm = (ad?: Ad) => {
+    if (ad) {
+      setEditingAd(ad);
+      setAdForm({
+        streamId: ad.streamId ?? '',
+        position: ad.position,
+        title: ad.title ?? '',
+        imageUrl: ad.imageUrl,
+        linkUrl: ad.linkUrl ?? '',
+        active: ad.active,
+      });
+    } else {
+      setEditingAd(null);
+      resetAdForm();
+    }
+    setAdFormOpen(true);
+  };
+
+  const resetAdForm = () => {
+    setAdForm({
+      streamId: '',
+      position: 'home-top',
+      title: '',
+      imageUrl: '',
+      linkUrl: '',
+      active: true,
+    });
   };
 
   return (
@@ -4333,9 +4439,14 @@ export default function AdminDashboard() {
                               <Label className="text-slate-300">الموقع</Label>
                               <select
                                 value={adForm.position}
-                                onChange={(e) =>
-                                  setAdForm({ ...adForm, position: e.target.value })
-                                }
+                                onChange={(e) => {
+                                  const nextPosition = e.target.value;
+                                  setAdForm((prev) => ({
+                                    ...prev,
+                                    position: nextPosition,
+                                    streamId: nextPosition.startsWith('stream-') ? prev.streamId : '',
+                                  }));
+                                }}
                                 className="w-full bg-slate-800 border-slate-700 text-white rounded-md p-2"
                               >
                                 <option value="home-top">الصفحة الرئيسية - أعلى</option>
@@ -4346,6 +4457,28 @@ export default function AdminDashboard() {
                                 <option value="popunder-legal">إعلان Popunder قانوني</option>
                               </select>
                             </div>
+                            {adForm.position.startsWith('stream-') && (
+                              <div className="space-y-2">
+                                <Label className="text-slate-300">القناة المستهدفة</Label>
+                                <select
+                                  value={adForm.streamId}
+                                  onChange={(e) =>
+                                    setAdForm({ ...adForm, streamId: e.target.value })
+                                  }
+                                  className="w-full bg-slate-800 border-slate-700 text-white rounded-md p-2"
+                                >
+                                  <option value="">اختر قناة</option>
+                                  {streams.map((stream) => (
+                                    <option key={stream.id} value={stream.id}>
+                                      {stream.title}
+                                    </option>
+                                  ))}
+                                </select>
+                                <p className="text-xs text-slate-500">
+                                  اختر قناة حتى يظهر الإعلان داخل صفحة البث.
+                                </p>
+                              </div>
+                            )}
                             <div className="space-y-2">
                               <Label className="text-slate-300">العنوان</Label>
                               <Input
