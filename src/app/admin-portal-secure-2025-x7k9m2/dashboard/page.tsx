@@ -2485,7 +2485,7 @@ export default function AdminDashboard() {
                             <div className="space-y-4 pt-4 border-t border-slate-700">
                               <div className="flex items-center justify-between">
                                 <Label className="text-slate-300 text-base font-semibold">
-                                  روابط البث (M3U/M3U8)
+                                  روابط البث (M3U/M3U8/TS)
                                 </Label>
                                 <Button
                                   type="button"
@@ -2499,7 +2499,7 @@ export default function AdminDashboard() {
                                 </Button>
                               </div>
                               <p className="text-xs text-slate-500">
-                                أضف روابط البث المباشرة للخوادم المختلفة (يمكنك إضافة عدد غير محدود)
+                                أضف روابط البث المباشرة للخوادم المختلفة (يدعم .m3u و.m3u8 و.ts)
                               </p>
 
                               <div className="space-y-3 max-h-80 overflow-y-auto">
@@ -2513,7 +2513,7 @@ export default function AdminDashboard() {
                                         id={`server-${index}`}
                                         value={url}
                                         onChange={(e) => updateServerUrl(index, e.target.value)}
-                                        placeholder="https://example.com/stream.m3u8"
+                                        placeholder="https://example.com/stream.m3u8 أو https://example.com/stream.ts"
                                         className="bg-slate-800 border-slate-700 text-white"
                                       />
                                     </div>
@@ -3209,7 +3209,7 @@ export default function AdminDashboard() {
                         <Textarea
                           value={batchUrlText}
                           onChange={(e) => setBatchUrlText(e.target.value)}
-                          placeholder="serverId-1,https://example.com/stream1.m3u8"
+                          placeholder="serverId-1,https://example.com/stream1.m3u8 أو https://example.com/stream1.ts"
                           className="bg-slate-800 border-slate-700 text-white min-h-[160px]"
                         />
                         <div className="flex items-center justify-end">
@@ -3511,7 +3511,7 @@ export default function AdminDashboard() {
                           <Input
                             value={qualityUrl}
                             onChange={(e) => setQualityUrl(e.target.value)}
-                            placeholder="https://example.com/stream.m3u8"
+                            placeholder="https://example.com/stream.m3u8 أو https://example.com/stream.ts"
                             className="bg-slate-800 border-slate-700 text-white"
                           />
                         </div>
@@ -3867,7 +3867,7 @@ export default function AdminDashboard() {
                             <Input
                               value={previewUrl}
                               onChange={(e) => setPreviewUrl(e.target.value)}
-                              placeholder="https://example.com/stream.m3u8"
+                              placeholder="https://example.com/stream.m3u8 أو https://example.com/stream.ts"
                               className="bg-slate-800 border-slate-700 text-white"
                             />
                           </div>
@@ -4653,13 +4653,13 @@ export default function AdminDashboard() {
               />
             </div>
             <div className="space-y-2">
-              <Label className="text-slate-300">رابط البث (M3U/M3U8)</Label>
+              <Label className="text-slate-300">رابط البث (M3U/M3U8/TS)</Label>
               <Input
                 value={serverForm.url}
                 onChange={(e) =>
                   setServerForm({ ...serverForm, url: e.target.value })
                 }
-                placeholder="https://example.com/stream.m3u8"
+                placeholder="https://example.com/stream.m3u8 أو https://example.com/stream.ts"
                 className="bg-slate-800 border-slate-700 text-white"
               />
             </div>
