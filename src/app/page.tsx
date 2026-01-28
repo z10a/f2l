@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, type MouseEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
 import Link from 'next/link';
 import {
   Play,
@@ -68,6 +68,8 @@ interface Ad {
   title: string | null;
   imageUrl: string;
   linkUrl: string | null;
+  position: string;
+  streamId?: string | null;
 }
 
 type FavoriteList = {
@@ -94,6 +96,8 @@ const ACCESSIBILITY_SETTINGS_KEY = 'accessibilitySettings';
 const PUSH_SETTINGS_KEY = 'pushNotificationSettings';
 const ENGAGEMENT_METRICS_KEY = 'engagementMetrics';
 const FEATURE_FLAGS_KEY = 'websiteFeatureFlags';
+const POPUNDER_LAST_OPEN_KEY = 'popunderLastOpenAt';
+const POPUNDER_OPEN_COUNT_KEY = 'popunderOpenCount';
 
 const CATEGORY_OPTIONS = ['all', 'sports', 'news', 'movies', 'kids', 'music'] as const;
 const LANGUAGE_OPTIONS = ['all', 'arabic', 'english'] as const;
@@ -391,11 +395,15 @@ export default function Home() {
   const [profileEmail, setProfileEmail] = useState('');
   const [siteSettings, setSiteSettings] = useState<{
     title?: string;
+    heroMessage?: string;
     faviconUrl?: string;
     appIconUrl?: string;
     primaryColor?: string;
     fontName?: string;
     fontUrl?: string;
+    popunderIntervalSeconds?: number;
+    popunderMaxOpens?: number;
+    defaultTheme?: 'dark' | 'light';
   } | null>(null);
   const [offlineEnabled, setOfflineEnabled] = useState(false);
   const [showCachedOnly, setShowCachedOnly] = useState(false);
@@ -413,7 +421,8 @@ export default function Home() {
   const [showNotificationsPanel, setShowNotificationsPanel] = useState(false);
   const [pushEnabled, setPushEnabled] = useState(false);
   const [pushSupported, setPushSupported] = useState(true);
-  const [featureFlags, setFeatureFlags] = useState({
+  const [featureFlagsLoaded, setFeatureFlagsLoaded] = useState(false);
+  const defaultFeatureFlags = {
     featuredChannels: true,
     mainHero: true,
     mainSearch: true,
@@ -429,6 +438,22 @@ export default function Home() {
     quickActions: true,
     liveChat: true,
     webRtc: true,
+  };
+  const [featureFlags, setFeatureFlags] = useState(() => {
+    if (typeof window === 'undefined') {
+      return defaultFeatureFlags;
+    }
+    const storedFlags = localStorage.getItem(FEATURE_FLAGS_KEY);
+    if (!storedFlags) {
+      return defaultFeatureFlags;
+    }
+    try {
+      const parsed = JSON.parse(storedFlags) as Partial<typeof defaultFeatureFlags>;
+      return { ...defaultFeatureFlags, ...parsed };
+    } catch (error) {
+      console.error('Failed to parse feature flags:', error);
+      return defaultFeatureFlags;
+    }
   });
   const [engagementMetrics, setEngagementMetrics] = useState({
     visits: 0,
@@ -441,6 +466,87 @@ export default function Home() {
 
   const labels = useMemo(() => UI_COPY[language], [language]);
   const dir = language === 'ar' ? 'rtl' : 'ltr';
+  const popunderShownRef = useRef(false);
+  const popunderLastOpenRef = useRef<number>(0);
+  const popunderOpenCountRef = useRef<number>(0);
+
+  const applySiteSettings = (nextSettings: {
+    title?: string;
+    siteTitle?: string;
+    heroMessage?: string;
+    faviconUrl?: string;
+    appIconUrl?: string;
+    primaryColor?: string;
+    fontName?: string;
+    fontUrl?: string;
+    popunderIntervalSeconds?: number;
+    popunderMaxOpens?: number;
+    defaultTheme?: 'dark' | 'light';
+  }) => {
+    const normalized = {
+      ...nextSettings,
+      title: nextSettings.title ?? nextSettings.siteTitle,
+    };
+    setSiteSettings(normalized);
+    if (normalized.title) {
+      document.title = normalized.title;
+    }
+    if (normalized.primaryColor) {
+      document.documentElement.style.setProperty('--brand-color', normalized.primaryColor);
+    }
+    if (normalized.fontName) {
+      document.documentElement.style.fontFamily = `${normalized.fontName}, ui-sans-serif, system-ui`;
+    }
+    if (normalized.fontUrl) {
+      const fontStyleId = 'custom-font-style';
+      let styleTag = document.getElementById(fontStyleId) as HTMLStyleElement | null;
+      if (!styleTag) {
+        styleTag = document.createElement('style');
+        styleTag.id = fontStyleId;
+        document.head.appendChild(styleTag);
+      }
+      const fontName = normalized.fontName || 'CustomFont';
+      styleTag.textContent = `
+@font-face {
+  font-family: '${fontName}';
+  src: url('${normalized.fontUrl}');
+  font-display: swap;
+}
+`;
+    }
+    if (normalized.faviconUrl) {
+      const faviconId = 'site-favicon';
+      let link = document.getElementById(faviconId) as HTMLLinkElement | null;
+      if (!link) {
+        link = document.createElement('link');
+        link.id = faviconId;
+        link.rel = 'icon';
+        document.head.appendChild(link);
+      }
+      link.href = normalized.faviconUrl;
+    }
+    if (normalized.defaultTheme) {
+      setTheme(normalized.defaultTheme);
+    }
+  };
+
+  const loadFeatureFlags = () => {
+    const storedFlags = localStorage.getItem(FEATURE_FLAGS_KEY);
+    if (!storedFlags) {
+      setFeatureFlags(defaultFeatureFlags);
+      setFeatureFlagsLoaded(true);
+      return;
+    }
+    try {
+      const parsed = JSON.parse(storedFlags) as Partial<typeof defaultFeatureFlags>;
+      setFeatureFlags({ ...defaultFeatureFlags, ...parsed });
+    } catch (error) {
+      console.error('Failed to parse feature flags:', error);
+      setFeatureFlags(defaultFeatureFlags);
+    } finally {
+      setFeatureFlagsLoaded(true);
+    }
+  };
 
   useEffect(() => {
     const storedPins = localStorage.getItem('pinnedStreams');
@@ -462,6 +568,29 @@ export default function Home() {
           setFeatureFlags((prev) => ({ ...prev, ...parsed }));
         } catch (error) {
           console.error('Failed to parse feature flags:', error);
+        }
+      }
+      if (event.key === WEBSITE_SETTINGS_KEY && event.newValue) {
+        try {
+          const parsed = JSON.parse(event.newValue) as {
+            title?: string;
+            siteTitle?: string;
+            heroMessage?: string;
+            faviconUrl?: string;
+            appIconUrl?: string;
+            primaryColor?: string;
+            fontName?: string;
+            fontUrl?: string;
+            popunderIntervalSeconds?: number;
+            popunderMaxOpens?: number;
+            defaultTheme?: 'dark' | 'light';
+          };
+          applySiteSettings({
+            ...parsed,
+            title: parsed.title ?? parsed.siteTitle,
+          });
+        } catch (error) {
+          console.error('Failed to parse site settings:', error);
         }
       }
       if (event.key === 'pinnedStreams' && event.newValue) {
@@ -562,15 +691,27 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    const storedFlags = localStorage.getItem(FEATURE_FLAGS_KEY);
-    if (storedFlags) {
-      try {
-        const parsed = JSON.parse(storedFlags) as Partial<typeof featureFlags>;
-        setFeatureFlags((prev) => ({ ...prev, ...parsed }));
-      } catch (error) {
-        console.error('Failed to parse feature flags:', error);
+    loadFeatureFlags();
+  }, []);
+
+  useEffect(() => {
+    const handleFocus = () => loadFeatureFlags();
+    const handleCustomUpdate = () => loadFeatureFlags();
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        loadFeatureFlags();
       }
-    }
+    };
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('featureFlagsUpdated', handleCustomUpdate);
+    document.addEventListener('visibilitychange', handleVisibility);
+    const intervalId = window.setInterval(loadFeatureFlags, 5000);
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('featureFlagsUpdated', handleCustomUpdate);
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.clearInterval(intervalId);
+    };
   }, []);
 
   useEffect(() => {
@@ -713,54 +854,17 @@ export default function Home() {
       const parsed = JSON.parse(storedSettings) as {
         title?: string;
         siteTitle?: string;
+        heroMessage?: string;
         faviconUrl?: string;
         appIconUrl?: string;
         primaryColor?: string;
         fontName?: string;
         fontUrl?: string;
+        popunderIntervalSeconds?: number;
+        popunderMaxOpens?: number;
+        defaultTheme?: 'dark' | 'light';
       };
-      const nextSettings = {
-        ...parsed,
-        title: parsed.title ?? parsed.siteTitle,
-      };
-      setSiteSettings(nextSettings);
-      if (nextSettings.title) {
-        document.title = nextSettings.title;
-      }
-      if (nextSettings.primaryColor) {
-        document.documentElement.style.setProperty('--brand-color', nextSettings.primaryColor);
-      }
-      if (nextSettings.fontName) {
-        document.documentElement.style.fontFamily = `${nextSettings.fontName}, ui-sans-serif, system-ui`;
-      }
-      if (nextSettings.fontUrl) {
-        const fontStyleId = 'custom-font-style';
-        let styleTag = document.getElementById(fontStyleId) as HTMLStyleElement | null;
-        if (!styleTag) {
-          styleTag = document.createElement('style');
-          styleTag.id = fontStyleId;
-          document.head.appendChild(styleTag);
-        }
-        const fontName = nextSettings.fontName || 'CustomFont';
-        styleTag.textContent = `
-@font-face {
-  font-family: '${fontName}';
-  src: url('${nextSettings.fontUrl}');
-  font-display: swap;
-}
-`;
-      }
-      if (nextSettings.faviconUrl) {
-        const faviconId = 'site-favicon';
-        let link = document.getElementById(faviconId) as HTMLLinkElement | null;
-        if (!link) {
-          link = document.createElement('link');
-          link.id = faviconId;
-          link.rel = 'icon';
-          document.head.appendChild(link);
-        }
-        link.href = nextSettings.faviconUrl;
-      }
+      applySiteSettings(parsed);
     } catch (error) {
       console.error('Failed to parse site settings:', error);
     }
@@ -965,11 +1069,12 @@ export default function Home() {
 
   const fetchAds = async () => {
     try {
-      const response = await fetch('/api/ads?position=home-top&active=true');
+      const response = await fetch('/api/ads?active=true');
       const data = await response.json();
-      setAds(data);
+      setAds(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Error fetching ads:', error);
+      setAds([]);
     }
   };
 
@@ -1013,8 +1118,46 @@ export default function Home() {
     },
   };
 
-  const topAds = ads.filter((ad) => ad.linkUrl);
-  const bottomAds = ads.filter((ad) => ad.linkUrl);
+  const safeAds = Array.isArray(ads) ? ads : [];
+  const topAds = safeAds.filter((ad) => ad.position === 'home-top');
+  const bottomAds = safeAds.filter((ad) => ad.position === 'home-bottom');
+  const popunderAd = safeAds.find((ad) => ad.position === 'popunder-legal' && ad.linkUrl);
+
+  const tryOpenPopunder = (trigger: string) => {
+    if (!popunderAd || !featureFlags.mainAds) return;
+    const intervalSeconds = siteSettings?.popunderIntervalSeconds ?? 120;
+    const maxOpens = siteSettings?.popunderMaxOpens ?? 3;
+    const now = Date.now();
+    const lastOpen = popunderLastOpenRef.current;
+    const openCount = popunderOpenCountRef.current;
+    if (openCount >= maxOpens) return;
+    if (lastOpen && now - lastOpen < intervalSeconds * 1000) return;
+    if (popunderShownRef.current) return;
+    popunderShownRef.current = true;
+    popunderLastOpenRef.current = now;
+    popunderOpenCountRef.current = openCount + 1;
+    sessionStorage.setItem(POPUNDER_LAST_OPEN_KEY, String(now));
+    sessionStorage.setItem(POPUNDER_OPEN_COUNT_KEY, String(popunderOpenCountRef.current));
+    window.open(popunderAd.linkUrl || '#', '_blank', 'noopener,noreferrer');
+    console.info('Popunder opened from', trigger);
+    window.setTimeout(() => {
+      popunderShownRef.current = false;
+    }, 500);
+  };
+
+  useEffect(() => {
+    const storedLast = sessionStorage.getItem(POPUNDER_LAST_OPEN_KEY);
+    const storedCount = sessionStorage.getItem(POPUNDER_OPEN_COUNT_KEY);
+    if (storedLast) popunderLastOpenRef.current = Number(storedLast);
+    if (storedCount) popunderOpenCountRef.current = Number(storedCount);
+  }, []);
+
+  useEffect(() => {
+    if (!popunderAd || !featureFlags.mainAds) return;
+    const handlePopunder = () => tryOpenPopunder('pointer');
+    document.addEventListener('pointerdown', handlePopunder);
+    return () => document.removeEventListener('pointerdown', handlePopunder);
+  }, [featureFlags.mainAds, popunderAd, siteSettings?.popunderIntervalSeconds, siteSettings?.popunderMaxOpens]);
 
   const fetchFavoriteLists = async (ownerKey: string) => {
     try {
@@ -1624,10 +1767,10 @@ export default function Home() {
         {featureFlags.mainHero && (
           <div className="text-center mb-8">
             <h2 className="text-4xl md:text-5xl font-bold mb-4 text-slate-800 dark:text-slate-100">
-              {labels.welcomeTitle}
+              {siteSettings?.title ?? labels.welcomeTitle}
             </h2>
             <p className="text-lg text-slate-600 dark:text-slate-400 max-w-2xl mx-auto">
-              {labels.welcomeBody}
+              {siteSettings?.heroMessage ?? labels.welcomeBody}
             </p>
           </div>
         )}
@@ -2335,7 +2478,7 @@ export default function Home() {
           </div>
         )}
 
-        {featureFlags.appsSection && (
+        {featureFlagsLoaded && featureFlags.appsSection && (
           <div className="mt-12 mb-8">
             <Card className="border-2 border-slate-200 dark:border-slate-800">
               <CardHeader>

@@ -93,9 +93,9 @@ interface Ad {
   id: string;
   streamId: string | null;
   position: string;
-  title: string;
+  title: string | null;
   imageUrl: string;
-  linkUrl: string;
+  linkUrl: string | null;
   active: boolean;
   createdAt?: string;
   updatedAt?: string;
@@ -245,6 +245,12 @@ interface SiteSettings {
   defaultTheme: 'dark' | 'light';
   faviconUrl?: string;
   appIconUrl?: string;
+  primaryColor?: string;
+  fontName?: string;
+  fontUrl?: string;
+  title?: string;
+  popunderIntervalSeconds?: number;
+  popunderMaxOpens?: number;
 }
 
 const WEBSITE_SETTINGS_KEY = 'websiteSettings';
@@ -409,6 +415,8 @@ export default function AdminDashboard() {
     defaultTheme: 'dark',
     faviconUrl: '',
     appIconUrl: '',
+    popunderIntervalSeconds: 120,
+    popunderMaxOpens: 3,
   });
   const [autoScalingConfig, setAutoScalingConfig] = useState({
     minServers: 2,
@@ -658,7 +666,11 @@ export default function AdminDashboard() {
     if (storedSettings) {
       try {
         const parsed = JSON.parse(storedSettings) as SiteSettings;
-        setSiteSettings(parsed);
+        setSiteSettings((prev) => ({
+          ...prev,
+          ...parsed,
+          siteTitle: parsed.siteTitle ?? parsed.title ?? prev.siteTitle,
+        }));
       } catch (error) {
         console.error('Error parsing site settings:', error);
       }
@@ -679,6 +691,7 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     localStorage.setItem(FEATURE_FLAGS_KEY, JSON.stringify(featureFlags));
+    window.dispatchEvent(new Event('featureFlagsUpdated'));
   }, [featureFlags]);
 
   useEffect(() => {
@@ -703,7 +716,10 @@ export default function AdminDashboard() {
   }, [streamRecommendations]);
 
   useEffect(() => {
-    localStorage.setItem(WEBSITE_SETTINGS_KEY, JSON.stringify(siteSettings));
+    localStorage.setItem(
+      WEBSITE_SETTINGS_KEY,
+      JSON.stringify({ ...siteSettings, title: siteSettings.siteTitle })
+    );
   }, [siteSettings]);
 
   useEffect(() => {
@@ -1818,29 +1834,115 @@ export default function AdminDashboard() {
 
   // Ad operations
   const handleCreateAd = async () => {
+    if (!adForm.imageUrl.trim() && adForm.position !== 'popunder-legal') {
+      toast.error('أدخل رابط الصورة للإعلان');
+      return;
+    }
+    if (adForm.position === 'popunder-legal' && !adForm.linkUrl.trim()) {
+      toast.error('أدخل رابط الإعلان لإعلان Popunder');
+      return;
+    }
     try {
-      const response = await fetch('/api/admin/preview-info', {
+      const payload = {
+        ...adForm,
+        streamId: adForm.position.startsWith('stream-') ? null : adForm.streamId || null,
+      };
+      const response = await fetch('/api/ads', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url }),
+        body: JSON.stringify(payload),
       });
       const data = await response.json();
       if (!response.ok) {
-        throw new Error(data.error || 'فشل جلب بيانات البث');
+        throw new Error(data.error || 'فشل إنشاء الإعلان');
       }
-      setPreviewReport({
-        status: 'success',
-        codec: data.codec,
-        resolution: data.resolution,
-        bitrateKbps: data.bitrateKbps,
-        latencyMs: data.latencyMs,
-      });
+      setAds((prev) => [data, ...prev]);
+      toast.success('تم إضافة الإعلان بنجاح');
+      setAdFormOpen(false);
+      resetAdForm();
     } catch (error) {
-      setPreviewReport({
-        status: 'failed',
-        message: error instanceof Error ? error.message : 'فشل جلب بيانات البث',
-      });
+      toast.error(error instanceof Error ? error.message : 'فشل إضافة الإعلان');
     }
+  };
+
+  const handleUpdateAd = async () => {
+    if (!editingAd) return;
+    if (!adForm.imageUrl.trim() && adForm.position !== 'popunder-legal') {
+      toast.error('أدخل رابط الصورة للإعلان');
+      return;
+    }
+    if (adForm.position === 'popunder-legal' && !adForm.linkUrl.trim()) {
+      toast.error('أدخل رابط الإعلان لإعلان Popunder');
+      return;
+    }
+    try {
+      const payload = {
+        id: editingAd.id,
+        ...adForm,
+        streamId: adForm.position.startsWith('stream-') ? null : adForm.streamId || null,
+      };
+      const response = await fetch('/api/ads', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'فشل تحديث الإعلان');
+      }
+      setAds((prev) => prev.map((ad) => (ad.id === data.id ? data : ad)));
+      toast.success('تم تحديث الإعلان بنجاح');
+      setAdFormOpen(false);
+      resetAdForm();
+      setEditingAd(null);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'فشل تحديث الإعلان');
+    }
+  };
+
+  const handleDeleteAd = async (id: string) => {
+    try {
+      const response = await fetch(`/api/ads?id=${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'فشل حذف الإعلان');
+      }
+      setAds((prev) => prev.filter((ad) => ad.id !== id));
+      toast.success('تم حذف الإعلان');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'فشل حذف الإعلان');
+    }
+  };
+
+  const openAdForm = (ad?: Ad) => {
+    if (ad) {
+      setEditingAd(ad);
+      setAdForm({
+        streamId: ad.streamId ?? '',
+        position: ad.position,
+        title: ad.title ?? '',
+        imageUrl: ad.imageUrl,
+        linkUrl: ad.linkUrl ?? '',
+        active: ad.active,
+      });
+    } else {
+      setEditingAd(null);
+      resetAdForm();
+    }
+    setAdFormOpen(true);
+  };
+
+  const resetAdForm = () => {
+    setAdForm({
+      streamId: '',
+      position: 'home-top',
+      title: '',
+      imageUrl: '',
+      linkUrl: '',
+      active: true,
+    });
   };
 
   return (
@@ -2383,7 +2485,7 @@ export default function AdminDashboard() {
                             <div className="space-y-4 pt-4 border-t border-slate-700">
                               <div className="flex items-center justify-between">
                                 <Label className="text-slate-300 text-base font-semibold">
-                                  روابط البث (M3U/M3U8)
+                                  روابط البث (M3U/M3U8/TS)
                                 </Label>
                                 <Button
                                   type="button"
@@ -2397,7 +2499,7 @@ export default function AdminDashboard() {
                                 </Button>
                               </div>
                               <p className="text-xs text-slate-500">
-                                أضف روابط البث المباشرة للخوادم المختلفة (يمكنك إضافة عدد غير محدود)
+                                أضف روابط البث المباشرة للخوادم المختلفة (يدعم .m3u و.m3u8 و.ts)
                               </p>
 
                               <div className="space-y-3 max-h-80 overflow-y-auto">
@@ -2411,7 +2513,7 @@ export default function AdminDashboard() {
                                         id={`server-${index}`}
                                         value={url}
                                         onChange={(e) => updateServerUrl(index, e.target.value)}
-                                        placeholder="https://example.com/stream.m3u8"
+                                        placeholder="https://example.com/stream.m3u8 أو https://example.com/stream.ts"
                                         className="bg-slate-800 border-slate-700 text-white"
                                       />
                                     </div>
@@ -3107,7 +3209,7 @@ export default function AdminDashboard() {
                         <Textarea
                           value={batchUrlText}
                           onChange={(e) => setBatchUrlText(e.target.value)}
-                          placeholder="serverId-1,https://example.com/stream1.m3u8"
+                          placeholder="serverId-1,https://example.com/stream1.m3u8 أو https://example.com/stream1.ts"
                           className="bg-slate-800 border-slate-700 text-white min-h-[160px]"
                         />
                         <div className="flex items-center justify-end">
@@ -3409,7 +3511,7 @@ export default function AdminDashboard() {
                           <Input
                             value={qualityUrl}
                             onChange={(e) => setQualityUrl(e.target.value)}
-                            placeholder="https://example.com/stream.m3u8"
+                            placeholder="https://example.com/stream.m3u8 أو https://example.com/stream.ts"
                             className="bg-slate-800 border-slate-700 text-white"
                           />
                         </div>
@@ -3765,7 +3867,7 @@ export default function AdminDashboard() {
                             <Input
                               value={previewUrl}
                               onChange={(e) => setPreviewUrl(e.target.value)}
-                              placeholder="https://example.com/stream.m3u8"
+                              placeholder="https://example.com/stream.m3u8 أو https://example.com/stream.ts"
                               className="bg-slate-800 border-slate-700 text-white"
                             />
                           </div>
@@ -4118,6 +4220,36 @@ export default function AdminDashboard() {
                             />
                           </div>
                           <div className="space-y-2">
+                            <Label className="text-slate-300">فاصل Popunder (بالثواني)</Label>
+                            <Input
+                              type="number"
+                              min={10}
+                              value={siteSettings.popunderIntervalSeconds ?? 120}
+                              onChange={(e) =>
+                                setSiteSettings({
+                                  ...siteSettings,
+                                  popunderIntervalSeconds: Number(e.target.value),
+                                })
+                              }
+                              className="bg-slate-800 border-slate-700 text-white"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label className="text-slate-300">حد مرات Popunder</Label>
+                            <Input
+                              type="number"
+                              min={1}
+                              value={siteSettings.popunderMaxOpens ?? 3}
+                              onChange={(e) =>
+                                setSiteSettings({
+                                  ...siteSettings,
+                                  popunderMaxOpens: Number(e.target.value),
+                                })
+                              }
+                              className="bg-slate-800 border-slate-700 text-white"
+                            />
+                          </div>
+                          <div className="space-y-2">
                             <Label className="text-slate-300">الثيم الافتراضي</Label>
                             <select
                               value={siteSettings.defaultTheme}
@@ -4333,9 +4465,14 @@ export default function AdminDashboard() {
                               <Label className="text-slate-300">الموقع</Label>
                               <select
                                 value={adForm.position}
-                                onChange={(e) =>
-                                  setAdForm({ ...adForm, position: e.target.value })
-                                }
+                                onChange={(e) => {
+                                  const nextPosition = e.target.value;
+                                  setAdForm((prev) => ({
+                                    ...prev,
+                                    position: nextPosition,
+                                    streamId: nextPosition.startsWith('stream-') ? '' : prev.streamId,
+                                  }));
+                                }}
                                 className="w-full bg-slate-800 border-slate-700 text-white rounded-md p-2"
                               >
                                 <option value="home-top">الصفحة الرئيسية - أعلى</option>
@@ -4346,6 +4483,11 @@ export default function AdminDashboard() {
                                 <option value="popunder-legal">إعلان Popunder قانوني</option>
                               </select>
                             </div>
+                            {adForm.position.startsWith('stream-') && (
+                              <p className="text-xs text-slate-500">
+                                سيتم تطبيق الإعلان على جميع القنوات في صفحة البث.
+                              </p>
+                            )}
                             <div className="space-y-2">
                               <Label className="text-slate-300">العنوان</Label>
                               <Input
@@ -4511,13 +4653,13 @@ export default function AdminDashboard() {
               />
             </div>
             <div className="space-y-2">
-              <Label className="text-slate-300">رابط البث (M3U/M3U8)</Label>
+              <Label className="text-slate-300">رابط البث (M3U/M3U8/TS)</Label>
               <Input
                 value={serverForm.url}
                 onChange={(e) =>
                   setServerForm({ ...serverForm, url: e.target.value })
                 }
-                placeholder="https://example.com/stream.m3u8"
+                placeholder="https://example.com/stream.m3u8 أو https://example.com/stream.ts"
                 className="bg-slate-800 border-slate-700 text-white"
               />
             </div>

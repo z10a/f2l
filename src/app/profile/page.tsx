@@ -115,6 +115,7 @@ export default function ProfilePage() {
     primaryColor?: string;
     fontName?: string;
     fontUrl?: string;
+    defaultTheme?: 'dark' | 'light';
   } | null>(null);
   const [featureFlags, setFeatureFlags] = useState({
     profileAccount: true,
@@ -126,6 +127,62 @@ export default function ProfilePage() {
 
   const labels = useMemo(() => COPY[language], [language]);
   const dir = language === 'ar' ? 'rtl' : 'ltr';
+
+  const applySiteSettings = (nextSettings: {
+    title?: string;
+    siteTitle?: string;
+    faviconUrl?: string;
+    primaryColor?: string;
+    fontName?: string;
+    fontUrl?: string;
+    defaultTheme?: 'dark' | 'light';
+  }) => {
+    const normalized = {
+      ...nextSettings,
+      title: nextSettings.title ?? nextSettings.siteTitle,
+    };
+    setSiteSettings(normalized);
+    if (normalized.title) {
+      document.title = normalized.title;
+    }
+    if (normalized.primaryColor) {
+      document.documentElement.style.setProperty('--brand-color', normalized.primaryColor);
+    }
+    if (normalized.fontName) {
+      document.documentElement.style.fontFamily = `${normalized.fontName}, ui-sans-serif, system-ui`;
+    }
+    if (normalized.fontUrl) {
+      const fontStyleId = 'custom-font-style';
+      let styleTag = document.getElementById(fontStyleId) as HTMLStyleElement | null;
+      if (!styleTag) {
+        styleTag = document.createElement('style');
+        styleTag.id = fontStyleId;
+        document.head.appendChild(styleTag);
+      }
+      const fontName = normalized.fontName || 'CustomFont';
+      styleTag.textContent = `
+@font-face {
+  font-family: '${fontName}';
+  src: url('${normalized.fontUrl}');
+  font-display: swap;
+}
+`;
+    }
+    if (normalized.faviconUrl) {
+      const faviconId = 'site-favicon';
+      let link = document.getElementById(faviconId) as HTMLLinkElement | null;
+      if (!link) {
+        link = document.createElement('link');
+        link.id = faviconId;
+        link.rel = 'icon';
+        document.head.appendChild(link);
+      }
+      link.href = normalized.faviconUrl;
+    }
+    if (normalized.defaultTheme) {
+      setTheme(normalized.defaultTheme);
+    }
+  };
 
   useEffect(() => {
     const storedLanguage = localStorage.getItem(UI_LANGUAGE_KEY);
@@ -206,52 +263,48 @@ export default function ProfilePage() {
     try {
       const parsed = JSON.parse(storedSettings) as {
         title?: string;
+        siteTitle?: string;
         faviconUrl?: string;
         primaryColor?: string;
         fontName?: string;
         fontUrl?: string;
+        defaultTheme?: 'dark' | 'light';
       };
-      setSiteSettings(parsed);
-      if (parsed.title) {
-        document.title = parsed.title;
-      }
-      if (parsed.primaryColor) {
-        document.documentElement.style.setProperty('--brand-color', parsed.primaryColor);
-      }
-      if (parsed.fontName) {
-        document.documentElement.style.fontFamily = `${parsed.fontName}, ui-sans-serif, system-ui`;
-      }
-      if (parsed.fontUrl) {
-        const fontStyleId = 'custom-font-style';
-        let styleTag = document.getElementById(fontStyleId) as HTMLStyleElement | null;
-        if (!styleTag) {
-          styleTag = document.createElement('style');
-          styleTag.id = fontStyleId;
-          document.head.appendChild(styleTag);
-        }
-        const fontName = parsed.fontName || 'CustomFont';
-        styleTag.textContent = `
-@font-face {
-  font-family: '${fontName}';
-  src: url('${parsed.fontUrl}');
-  font-display: swap;
-}
-`;
-      }
-      if (parsed.faviconUrl) {
-        const faviconId = 'site-favicon';
-        let link = document.getElementById(faviconId) as HTMLLinkElement | null;
-        if (!link) {
-          link = document.createElement('link');
-          link.id = faviconId;
-          link.rel = 'icon';
-          document.head.appendChild(link);
-        }
-        link.href = parsed.faviconUrl;
-      }
+      applySiteSettings(parsed);
     } catch (error) {
       console.error('Failed to parse site settings:', error);
     }
+  }, []);
+
+  useEffect(() => {
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === WEBSITE_SETTINGS_KEY && event.newValue) {
+        try {
+          const parsed = JSON.parse(event.newValue) as {
+            title?: string;
+            siteTitle?: string;
+            faviconUrl?: string;
+            primaryColor?: string;
+            fontName?: string;
+            fontUrl?: string;
+            defaultTheme?: 'dark' | 'light';
+          };
+          applySiteSettings(parsed);
+        } catch (error) {
+          console.error('Failed to parse site settings:', error);
+        }
+      }
+      if (event.key === FEATURE_FLAGS_KEY && event.newValue) {
+        try {
+          const parsed = JSON.parse(event.newValue) as Partial<typeof featureFlags>;
+          setFeatureFlags((prev) => ({ ...prev, ...parsed }));
+        } catch (error) {
+          console.error('Failed to parse feature flags:', error);
+        }
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
   }, []);
 
   useEffect(() => {
