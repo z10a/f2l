@@ -305,6 +305,25 @@ export default function StreamPage() {
   }, []);
 
   useEffect(() => {
+    const storedSettings = localStorage.getItem(WEBSITE_SETTINGS_KEY);
+    if (!storedSettings) return;
+    try {
+      const parsed = JSON.parse(storedSettings) as {
+        title?: string;
+        siteTitle?: string;
+        faviconUrl?: string;
+        appIconUrl?: string;
+        primaryColor?: string;
+        fontName?: string;
+        fontUrl?: string;
+      };
+      applySiteSettings(parsed);
+    } catch (error) {
+      console.error('Failed to parse site settings:', error);
+    }
+  }, []);
+
+  useEffect(() => {
     const storedRecommendations = localStorage.getItem(STREAM_RECOMMENDATIONS_KEY);
     if (storedRecommendations) {
       try {
