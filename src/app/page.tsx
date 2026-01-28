@@ -403,6 +403,7 @@ export default function Home() {
     fontUrl?: string;
     popunderIntervalSeconds?: number;
     popunderMaxOpens?: number;
+    defaultTheme?: 'dark' | 'light';
   } | null>(null);
   const [offlineEnabled, setOfflineEnabled] = useState(false);
   const [showCachedOnly, setShowCachedOnly] = useState(false);
@@ -420,7 +421,8 @@ export default function Home() {
   const [showNotificationsPanel, setShowNotificationsPanel] = useState(false);
   const [pushEnabled, setPushEnabled] = useState(false);
   const [pushSupported, setPushSupported] = useState(true);
-  const [featureFlags, setFeatureFlags] = useState({
+  const [featureFlagsLoaded, setFeatureFlagsLoaded] = useState(false);
+  const defaultFeatureFlags = {
     featuredChannels: true,
     mainHero: true,
     mainSearch: true,
@@ -436,6 +438,22 @@ export default function Home() {
     quickActions: true,
     liveChat: true,
     webRtc: true,
+  };
+  const [featureFlags, setFeatureFlags] = useState(() => {
+    if (typeof window === 'undefined') {
+      return defaultFeatureFlags;
+    }
+    const storedFlags = localStorage.getItem(FEATURE_FLAGS_KEY);
+    if (!storedFlags) {
+      return defaultFeatureFlags;
+    }
+    try {
+      const parsed = JSON.parse(storedFlags) as Partial<typeof defaultFeatureFlags>;
+      return { ...defaultFeatureFlags, ...parsed };
+    } catch (error) {
+      console.error('Failed to parse feature flags:', error);
+      return defaultFeatureFlags;
+    }
   });
   const [engagementMetrics, setEngagementMetrics] = useState({
     visits: 0,
@@ -463,6 +481,7 @@ export default function Home() {
     fontUrl?: string;
     popunderIntervalSeconds?: number;
     popunderMaxOpens?: number;
+    defaultTheme?: 'dark' | 'light';
   }) => {
     const normalized = {
       ...nextSettings,
@@ -506,16 +525,26 @@ export default function Home() {
       }
       link.href = normalized.faviconUrl;
     }
+    if (normalized.defaultTheme) {
+      setTheme(normalized.defaultTheme);
+    }
   };
 
   const loadFeatureFlags = () => {
     const storedFlags = localStorage.getItem(FEATURE_FLAGS_KEY);
-    if (!storedFlags) return;
+    if (!storedFlags) {
+      setFeatureFlags(defaultFeatureFlags);
+      setFeatureFlagsLoaded(true);
+      return;
+    }
     try {
-      const parsed = JSON.parse(storedFlags) as Partial<typeof featureFlags>;
-      setFeatureFlags((prev) => ({ ...prev, ...parsed }));
+      const parsed = JSON.parse(storedFlags) as Partial<typeof defaultFeatureFlags>;
+      setFeatureFlags({ ...defaultFeatureFlags, ...parsed });
     } catch (error) {
       console.error('Failed to parse feature flags:', error);
+      setFeatureFlags(defaultFeatureFlags);
+    } finally {
+      setFeatureFlagsLoaded(true);
     }
   };
 
@@ -554,6 +583,7 @@ export default function Home() {
             fontUrl?: string;
             popunderIntervalSeconds?: number;
             popunderMaxOpens?: number;
+            defaultTheme?: 'dark' | 'light';
           };
           applySiteSettings({
             ...parsed,
@@ -832,6 +862,7 @@ export default function Home() {
         fontUrl?: string;
         popunderIntervalSeconds?: number;
         popunderMaxOpens?: number;
+        defaultTheme?: 'dark' | 'light';
       };
       applySiteSettings(parsed);
     } catch (error) {
@@ -1040,9 +1071,10 @@ export default function Home() {
     try {
       const response = await fetch('/api/ads?active=true');
       const data = await response.json();
-      setAds(data);
+      setAds(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Error fetching ads:', error);
+      setAds([]);
     }
   };
 
@@ -1086,13 +1118,14 @@ export default function Home() {
     },
   };
 
-  const topAds = ads.filter((ad) => ad.position === 'home-top');
-  const bottomAds = ads.filter((ad) => ad.position === 'home-bottom');
-  const popunderAd = ads.find((ad) => ad.position === 'popunder-legal' && ad.linkUrl);
+  const safeAds = Array.isArray(ads) ? ads : [];
+  const topAds = safeAds.filter((ad) => ad.position === 'home-top');
+  const bottomAds = safeAds.filter((ad) => ad.position === 'home-bottom');
+  const popunderAd = safeAds.find((ad) => ad.position === 'popunder-legal' && ad.linkUrl);
 
   const tryOpenPopunder = (trigger: string) => {
     if (!popunderAd || !featureFlags.mainAds) return;
-    const intervalSeconds = siteSettings?.popunderIntervalSeconds ?? 300;
+    const intervalSeconds = siteSettings?.popunderIntervalSeconds ?? 120;
     const maxOpens = siteSettings?.popunderMaxOpens ?? 3;
     const now = Date.now();
     const lastOpen = popunderLastOpenRef.current;
@@ -2445,7 +2478,7 @@ export default function Home() {
           </div>
         )}
 
-        {featureFlags.appsSection && (
+        {featureFlagsLoaded && featureFlags.appsSection && (
           <div className="mt-12 mb-8">
             <Card className="border-2 border-slate-200 dark:border-slate-800">
               <CardHeader>

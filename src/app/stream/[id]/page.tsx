@@ -96,6 +96,7 @@ export default function StreamPage() {
     fontUrl?: string;
     popunderIntervalSeconds?: number;
     popunderMaxOpens?: number;
+    defaultTheme?: 'dark' | 'light';
   } | null>(null);
 
   const applySiteSettings = (nextSettings: {
@@ -108,6 +109,7 @@ export default function StreamPage() {
     fontUrl?: string;
     popunderIntervalSeconds?: number;
     popunderMaxOpens?: number;
+    defaultTheme?: 'dark' | 'light';
   }) => {
     const normalized = {
       ...nextSettings,
@@ -150,6 +152,10 @@ export default function StreamPage() {
         document.head.appendChild(link);
       }
       link.href = normalized.faviconUrl;
+    }
+    if (normalized.defaultTheme) {
+      document.documentElement.classList.toggle('dark', normalized.defaultTheme === 'dark');
+      localStorage.setItem('uiTheme', normalized.defaultTheme);
     }
   };
 
@@ -238,6 +244,7 @@ export default function StreamPage() {
             fontUrl?: string;
             popunderIntervalSeconds?: number;
             popunderMaxOpens?: number;
+            defaultTheme?: 'dark' | 'light';
           };
           applySiteSettings(parsed);
         } catch (error) {
@@ -290,6 +297,7 @@ export default function StreamPage() {
         fontUrl?: string;
         popunderIntervalSeconds?: number;
         popunderMaxOpens?: number;
+        defaultTheme?: 'dark' | 'light';
       };
       applySiteSettings(parsed);
     } catch (error) {
@@ -302,25 +310,6 @@ export default function StreamPage() {
     const storedCount = sessionStorage.getItem(POPUNDER_OPEN_COUNT_KEY);
     if (storedLast) popunderLastOpenRef.current = Number(storedLast);
     if (storedCount) popunderOpenCountRef.current = Number(storedCount);
-  }, []);
-
-  useEffect(() => {
-    const storedSettings = localStorage.getItem(WEBSITE_SETTINGS_KEY);
-    if (!storedSettings) return;
-    try {
-      const parsed = JSON.parse(storedSettings) as {
-        title?: string;
-        siteTitle?: string;
-        faviconUrl?: string;
-        appIconUrl?: string;
-        primaryColor?: string;
-        fontName?: string;
-        fontUrl?: string;
-      };
-      applySiteSettings(parsed);
-    } catch (error) {
-      console.error('Failed to parse site settings:', error);
-    }
   }, []);
 
   useEffect(() => {
@@ -377,7 +366,10 @@ export default function StreamPage() {
     try {
       const response = await fetch('/api/ads?active=true');
       const data = await response.json();
-      if (!Array.isArray(data)) return;
+      if (!Array.isArray(data)) {
+        setStreamAds([]);
+        return;
+      }
       const filtered = data.filter(
         (ad: Ad) =>
           ad.position.startsWith('stream-') &&
@@ -386,6 +378,7 @@ export default function StreamPage() {
       setStreamAds(filtered);
     } catch (error) {
       console.error('Error fetching stream ads:', error);
+      setStreamAds([]);
     }
   };
 
@@ -403,7 +396,7 @@ export default function StreamPage() {
 
   const tryOpenPopunder = (trigger: string) => {
     if (!popunderAd || !featureFlags.mainAds) return;
-    const intervalSeconds = siteSettings?.popunderIntervalSeconds ?? 300;
+    const intervalSeconds = siteSettings?.popunderIntervalSeconds ?? 120;
     const maxOpens = siteSettings?.popunderMaxOpens ?? 3;
     const now = Date.now();
     const lastOpen = popunderLastOpenRef.current;
@@ -522,12 +515,14 @@ export default function StreamPage() {
     );
   }
 
-  const topAds = stream.ads.filter((ad) => ad.position === 'stream-top');
-  const bottomAds = stream.ads.filter((ad) => ad.position === 'stream-bottom');
-  const sidebarAds = stream.ads.filter((ad) => ad.position === 'stream-sidebar');
-  const mergedTopAds = [...topAds, ...streamAds.filter((ad) => ad.position === 'stream-top')];
-  const mergedBottomAds = [...bottomAds, ...streamAds.filter((ad) => ad.position === 'stream-bottom')];
-  const mergedSidebarAds = [...sidebarAds, ...streamAds.filter((ad) => ad.position === 'stream-sidebar')];
+  const streamAdList = Array.isArray(streamAds) ? streamAds : [];
+  const streamAdsFromStream = Array.isArray(stream.ads) ? stream.ads : [];
+  const topAds = streamAdsFromStream.filter((ad) => ad.position === 'stream-top');
+  const bottomAds = streamAdsFromStream.filter((ad) => ad.position === 'stream-bottom');
+  const sidebarAds = streamAdsFromStream.filter((ad) => ad.position === 'stream-sidebar');
+  const mergedTopAds = [...topAds, ...streamAdList.filter((ad) => ad.position === 'stream-top')];
+  const mergedBottomAds = [...bottomAds, ...streamAdList.filter((ad) => ad.position === 'stream-bottom')];
+  const mergedSidebarAds = [...sidebarAds, ...streamAdList.filter((ad) => ad.position === 'stream-sidebar')];
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-b from-slate-50 to-white dark:from-slate-950 dark:to-slate-900" dir="rtl">

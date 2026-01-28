@@ -415,7 +415,7 @@ export default function AdminDashboard() {
     defaultTheme: 'dark',
     faviconUrl: '',
     appIconUrl: '',
-    popunderIntervalSeconds: 300,
+    popunderIntervalSeconds: 120,
     popunderMaxOpens: 3,
   });
   const [autoScalingConfig, setAutoScalingConfig] = useState({
@@ -4224,7 +4224,7 @@ export default function AdminDashboard() {
                             <Input
                               type="number"
                               min={10}
-                              value={siteSettings.popunderIntervalSeconds ?? 300}
+                              value={siteSettings.popunderIntervalSeconds ?? 120}
                               onChange={(e) =>
                                 setSiteSettings({
                                   ...siteSettings,

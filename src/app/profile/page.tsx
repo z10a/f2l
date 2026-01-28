@@ -115,6 +115,7 @@ export default function ProfilePage() {
     primaryColor?: string;
     fontName?: string;
     fontUrl?: string;
+    defaultTheme?: 'dark' | 'light';
   } | null>(null);
   const [featureFlags, setFeatureFlags] = useState({
     profileAccount: true,
@@ -134,6 +135,7 @@ export default function ProfilePage() {
     primaryColor?: string;
     fontName?: string;
     fontUrl?: string;
+    defaultTheme?: 'dark' | 'light';
   }) => {
     const normalized = {
       ...nextSettings,
@@ -176,6 +178,9 @@ export default function ProfilePage() {
         document.head.appendChild(link);
       }
       link.href = normalized.faviconUrl;
+    }
+    if (normalized.defaultTheme) {
+      setTheme(normalized.defaultTheme);
     }
   };
 
@@ -263,6 +268,7 @@ export default function ProfilePage() {
         primaryColor?: string;
         fontName?: string;
         fontUrl?: string;
+        defaultTheme?: 'dark' | 'light';
       };
       applySiteSettings(parsed);
     } catch (error) {
@@ -281,6 +287,7 @@ export default function ProfilePage() {
             primaryColor?: string;
             fontName?: string;
             fontUrl?: string;
+            defaultTheme?: 'dark' | 'light';
           };
           applySiteSettings(parsed);
         } catch (error) {
