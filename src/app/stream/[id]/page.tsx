@@ -27,6 +27,7 @@ interface Ad {
   imageUrl: string;
   linkUrl: string | null;
   position: string;
+  streamId?: string | null;
 }
 
 interface StreamData {
@@ -52,7 +53,10 @@ interface StreamRecommendationSettings {
 }
 
 const FEATURE_FLAGS_KEY = 'websiteFeatureFlags';
+const WEBSITE_SETTINGS_KEY = 'websiteSettings';
 const STREAM_RECOMMENDATIONS_KEY = 'streamRecommendations';
+const POPUNDER_LAST_OPEN_KEY = 'popunderLastOpenAt';
+const POPUNDER_OPEN_COUNT_KEY = 'popunderOpenCount';
 
 export default function StreamPage() {
   const params = useParams<{ id: string }>();
@@ -64,6 +68,7 @@ export default function StreamPage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
   const [featureFlags, setFeatureFlags] = useState({
+    mainAds: true,
     streamRecommended: true,
     streamDescription: true,
     streamAdsTop: true,
@@ -76,10 +81,83 @@ export default function StreamPage() {
     manualIds: [],
   });
   const [allStreams, setAllStreams] = useState<StreamSummary[]>([]);
+  const [streamAds, setStreamAds] = useState<Ad[]>([]);
+  const [popunderAd, setPopunderAd] = useState<Ad | null>(null);
+  const popunderShownRef = useRef(false);
+  const popunderLastOpenRef = useRef<number>(0);
+  const popunderOpenCountRef = useRef<number>(0);
+  const [siteSettings, setSiteSettings] = useState<{
+    title?: string;
+    siteTitle?: string;
+    faviconUrl?: string;
+    appIconUrl?: string;
+    primaryColor?: string;
+    fontName?: string;
+    fontUrl?: string;
+    popunderIntervalSeconds?: number;
+    popunderMaxOpens?: number;
+  } | null>(null);
+
+  const applySiteSettings = (nextSettings: {
+    title?: string;
+    siteTitle?: string;
+    faviconUrl?: string;
+    appIconUrl?: string;
+    primaryColor?: string;
+    fontName?: string;
+    fontUrl?: string;
+    popunderIntervalSeconds?: number;
+    popunderMaxOpens?: number;
+  }) => {
+    const normalized = {
+      ...nextSettings,
+      title: nextSettings.title ?? nextSettings.siteTitle,
+    };
+    setSiteSettings(normalized);
+    if (normalized.title) {
+      document.title = normalized.title;
+    }
+    if (normalized.primaryColor) {
+      document.documentElement.style.setProperty('--brand-color', normalized.primaryColor);
+    }
+    if (normalized.fontName) {
+      document.documentElement.style.fontFamily = `${normalized.fontName}, ui-sans-serif, system-ui`;
+    }
+    if (normalized.fontUrl) {
+      const fontStyleId = 'custom-font-style';
+      let styleTag = document.getElementById(fontStyleId) as HTMLStyleElement | null;
+      if (!styleTag) {
+        styleTag = document.createElement('style');
+        styleTag.id = fontStyleId;
+        document.head.appendChild(styleTag);
+      }
+      const fontName = normalized.fontName || 'CustomFont';
+      styleTag.textContent = `
+@font-face {
+  font-family: '${fontName}';
+  src: url('${normalized.fontUrl}');
+  font-display: swap;
+}
+`;
+    }
+    if (normalized.faviconUrl) {
+      const faviconId = 'site-favicon';
+      let link = document.getElementById(faviconId) as HTMLLinkElement | null;
+      if (!link) {
+        link = document.createElement('link');
+        link.id = faviconId;
+        link.rel = 'icon';
+        document.head.appendChild(link);
+      }
+      link.href = normalized.faviconUrl;
+    }
+  };
 
   useEffect(() => {
     if (!streamId) return;
     fetchStream(streamId);
+    fetchStreamAds(streamId);
+    fetchPopunderAd();
   }, [streamId]);
 
   useEffect(() => {
@@ -91,6 +169,7 @@ export default function StreamPage() {
   useEffect(() => {
     if (selectedServer && videoRef.current) {
       loadStream(selectedServer.url);
+      tryOpenPopunder('server-switch');
     }
 
     return () => {
@@ -113,6 +192,31 @@ export default function StreamPage() {
   }, []);
 
   useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    const handlePlay = () => tryOpenPopunder('play');
+    const handlePause = () => tryOpenPopunder('pause');
+    video.addEventListener('play', handlePlay);
+    video.addEventListener('pause', handlePause);
+    return () => {
+      video.removeEventListener('play', handlePlay);
+      video.removeEventListener('pause', handlePause);
+    };
+  }, [videoRef.current, popunderAd, siteSettings?.popunderIntervalSeconds, siteSettings?.popunderMaxOpens]);
+
+  useEffect(() => {
+    const handlePointer = () => tryOpenPopunder('pointer');
+    document.addEventListener('pointerdown', handlePointer);
+    return () => document.removeEventListener('pointerdown', handlePointer);
+  }, [popunderAd, siteSettings?.popunderIntervalSeconds, siteSettings?.popunderMaxOpens]);
+
+  useEffect(() => {
+    if (stream) {
+      tryOpenPopunder('open-stream');
+    }
+  }, [stream, popunderAd, siteSettings?.popunderIntervalSeconds, siteSettings?.popunderMaxOpens]);
+
+  useEffect(() => {
     const handleStorage = (event: StorageEvent) => {
       if (event.key === FEATURE_FLAGS_KEY && event.newValue) {
         try {
@@ -120,6 +224,24 @@ export default function StreamPage() {
           setFeatureFlags((prev) => ({ ...prev, ...parsed }));
         } catch (error) {
           console.error('Failed to parse feature flags:', error);
+        }
+      }
+      if (event.key === WEBSITE_SETTINGS_KEY && event.newValue) {
+        try {
+          const parsed = JSON.parse(event.newValue) as {
+            title?: string;
+            siteTitle?: string;
+            faviconUrl?: string;
+            appIconUrl?: string;
+            primaryColor?: string;
+            fontName?: string;
+            fontUrl?: string;
+            popunderIntervalSeconds?: number;
+            popunderMaxOpens?: number;
+          };
+          applySiteSettings(parsed);
+        } catch (error) {
+          console.error('Failed to parse site settings:', error);
         }
       }
       if (event.key === STREAM_RECOMMENDATIONS_KEY && event.newValue) {
@@ -137,7 +259,49 @@ export default function StreamPage() {
       }
     };
     window.addEventListener('storage', handleStorage);
-    return () => window.removeEventListener('storage', handleStorage);
+    const handleFeatureFlags = () => {
+      const storedFlags = localStorage.getItem(FEATURE_FLAGS_KEY);
+      if (!storedFlags) return;
+      try {
+        const parsed = JSON.parse(storedFlags) as Partial<typeof featureFlags>;
+        setFeatureFlags((prev) => ({ ...prev, ...parsed }));
+      } catch (error) {
+        console.error('Failed to parse feature flags:', error);
+      }
+    };
+    window.addEventListener('featureFlagsUpdated', handleFeatureFlags);
+    return () => {
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('featureFlagsUpdated', handleFeatureFlags);
+    };
+  }, []);
+
+  useEffect(() => {
+    const storedSettings = localStorage.getItem(WEBSITE_SETTINGS_KEY);
+    if (!storedSettings) return;
+    try {
+      const parsed = JSON.parse(storedSettings) as {
+        title?: string;
+        siteTitle?: string;
+        faviconUrl?: string;
+        appIconUrl?: string;
+        primaryColor?: string;
+        fontName?: string;
+        fontUrl?: string;
+        popunderIntervalSeconds?: number;
+        popunderMaxOpens?: number;
+      };
+      applySiteSettings(parsed);
+    } catch (error) {
+      console.error('Failed to parse site settings:', error);
+    }
+  }, []);
+
+  useEffect(() => {
+    const storedLast = sessionStorage.getItem(POPUNDER_LAST_OPEN_KEY);
+    const storedCount = sessionStorage.getItem(POPUNDER_OPEN_COUNT_KEY);
+    if (storedLast) popunderLastOpenRef.current = Number(storedLast);
+    if (storedCount) popunderOpenCountRef.current = Number(storedCount);
   }, []);
 
   useEffect(() => {
@@ -188,6 +352,56 @@ export default function StreamPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchStreamAds = async (id: string) => {
+    try {
+      const response = await fetch('/api/ads?active=true');
+      const data = await response.json();
+      if (!Array.isArray(data)) return;
+      const filtered = data.filter(
+        (ad: Ad) =>
+          ad.position.startsWith('stream-') &&
+          (!ad.streamId || ad.streamId === id)
+      );
+      setStreamAds(filtered);
+    } catch (error) {
+      console.error('Error fetching stream ads:', error);
+    }
+  };
+
+  const fetchPopunderAd = async () => {
+    try {
+      const response = await fetch('/api/ads?active=true&position=popunder-legal');
+      const data = await response.json();
+      if (Array.isArray(data)) {
+        setPopunderAd(data.find((ad: Ad) => ad.linkUrl) ?? null);
+      }
+    } catch (error) {
+      console.error('Error fetching popunder ads:', error);
+    }
+  };
+
+  const tryOpenPopunder = (trigger: string) => {
+    if (!popunderAd || !featureFlags.mainAds) return;
+    const intervalSeconds = siteSettings?.popunderIntervalSeconds ?? 300;
+    const maxOpens = siteSettings?.popunderMaxOpens ?? 3;
+    const now = Date.now();
+    const lastOpen = popunderLastOpenRef.current;
+    const openCount = popunderOpenCountRef.current;
+    if (openCount >= maxOpens) return;
+    if (lastOpen && now - lastOpen < intervalSeconds * 1000) return;
+    if (popunderShownRef.current) return;
+    popunderShownRef.current = true;
+    popunderLastOpenRef.current = now;
+    popunderOpenCountRef.current = openCount + 1;
+    sessionStorage.setItem(POPUNDER_LAST_OPEN_KEY, String(now));
+    sessionStorage.setItem(POPUNDER_OPEN_COUNT_KEY, String(popunderOpenCountRef.current));
+    window.open(popunderAd.linkUrl || '#', '_blank', 'noopener,noreferrer');
+    console.info('Popunder opened from', trigger);
+    window.setTimeout(() => {
+      popunderShownRef.current = false;
+    }, 500);
   };
 
   const loadStream = (url: string) => {
@@ -292,6 +506,9 @@ export default function StreamPage() {
   const topAds = stream.ads.filter((ad) => ad.position === 'stream-top');
   const bottomAds = stream.ads.filter((ad) => ad.position === 'stream-bottom');
   const sidebarAds = stream.ads.filter((ad) => ad.position === 'stream-sidebar');
+  const mergedTopAds = [...topAds, ...streamAds.filter((ad) => ad.position === 'stream-top')];
+  const mergedBottomAds = [...bottomAds, ...streamAds.filter((ad) => ad.position === 'stream-bottom')];
+  const mergedSidebarAds = [...sidebarAds, ...streamAds.filter((ad) => ad.position === 'stream-sidebar')];
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-b from-slate-50 to-white dark:from-slate-950 dark:to-slate-900" dir="rtl">
@@ -304,11 +521,22 @@ export default function StreamPage() {
               <span className="font-medium">العودة</span>
             </Link>
             <div className="flex items-center gap-3">
-              <div className="bg-gradient-to-br from-red-500 to-red-700 p-2 rounded-lg">
-                <Tv className="h-5 w-5 text-white" />
+              <div
+                className="p-2 rounded-lg"
+                style={{ backgroundColor: siteSettings?.primaryColor ?? '#dc2626' }}
+              >
+                {siteSettings?.appIconUrl ? (
+                  <img
+                    src={siteSettings.appIconUrl}
+                    alt={siteSettings.title ?? 'منصة البث المباشر'}
+                    className="h-5 w-5 object-contain"
+                  />
+                ) : (
+                  <Tv className="h-5 w-5 text-white" />
+                )}
               </div>
-              <h1 className="text-lg font-bold bg-gradient-to-r from-red-600 to-red-800 bg-clip-text text-transparent">
-                منصة البث المباشر
+              <h1 className="text-lg font-bold text-slate-800 dark:text-slate-100">
+                {siteSettings?.title ?? 'منصة البث المباشر'}
               </h1>
             </div>
           </div>
@@ -318,10 +546,10 @@ export default function StreamPage() {
       {/* Main Content */}
       <main className="flex-1 container mx-auto px-4 py-8">
         {/* Top Ads */}
-        {featureFlags.streamAdsTop && topAds.length > 0 && (
+        {featureFlags.streamAdsTop && mergedTopAds.length > 0 && (
           <div className="mb-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {topAds.map((ad) => (
+              {mergedTopAds.map((ad) => (
                 ad.linkUrl ? (
                   <a
                     key={ad.id}
@@ -523,10 +751,10 @@ export default function StreamPage() {
             )}
 
             {/* Bottom Ads */}
-            {featureFlags.streamAdsBottom && bottomAds.length > 0 && (
+            {featureFlags.streamAdsBottom && mergedBottomAds.length > 0 && (
               <div className="mt-6">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {bottomAds.map((ad) => (
+                  {mergedBottomAds.map((ad) => (
                     ad.linkUrl ? (
                       <a
                         key={ad.id}
@@ -570,8 +798,8 @@ export default function StreamPage() {
                   <CardTitle>إعلانات</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {sidebarAds.length > 0 ? (
-                    sidebarAds.map((ad) => (
+                  {mergedSidebarAds.length > 0 ? (
+                    mergedSidebarAds.map((ad) => (
                       ad.linkUrl ? (
                         <a
                           key={ad.id}
