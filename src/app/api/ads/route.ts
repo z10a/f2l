@@ -87,7 +87,15 @@ export async function PUT(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
+    let id = searchParams.get('id');
+    if (!id) {
+      try {
+        const body = await request.json();
+        id = body?.id;
+      } catch (error) {
+        console.error('Error parsing delete ad body:', error);
+      }
+    }
 
     if (!id) {
       return NextResponse.json(
