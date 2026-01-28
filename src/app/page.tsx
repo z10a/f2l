@@ -69,6 +69,7 @@ interface Ad {
   imageUrl: string;
   linkUrl: string | null;
   position: string;
+  streamId?: string | null;
 }
 
 type FavoriteList = {
@@ -95,6 +96,8 @@ const ACCESSIBILITY_SETTINGS_KEY = 'accessibilitySettings';
 const PUSH_SETTINGS_KEY = 'pushNotificationSettings';
 const ENGAGEMENT_METRICS_KEY = 'engagementMetrics';
 const FEATURE_FLAGS_KEY = 'websiteFeatureFlags';
+const POPUNDER_LAST_OPEN_KEY = 'popunderLastOpenAt';
+const POPUNDER_OPEN_COUNT_KEY = 'popunderOpenCount';
 
 const CATEGORY_OPTIONS = ['all', 'sports', 'news', 'movies', 'kids', 'music'] as const;
 const LANGUAGE_OPTIONS = ['all', 'arabic', 'english'] as const;
@@ -398,6 +401,8 @@ export default function Home() {
     primaryColor?: string;
     fontName?: string;
     fontUrl?: string;
+    popunderIntervalSeconds?: number;
+    popunderMaxOpens?: number;
   } | null>(null);
   const [offlineEnabled, setOfflineEnabled] = useState(false);
   const [showCachedOnly, setShowCachedOnly] = useState(false);
@@ -444,6 +449,8 @@ export default function Home() {
   const labels = useMemo(() => UI_COPY[language], [language]);
   const dir = language === 'ar' ? 'rtl' : 'ltr';
   const popunderShownRef = useRef(false);
+  const popunderLastOpenRef = useRef<number>(0);
+  const popunderOpenCountRef = useRef<number>(0);
 
   const applySiteSettings = (nextSettings: {
     title?: string;
@@ -454,6 +461,8 @@ export default function Home() {
     primaryColor?: string;
     fontName?: string;
     fontUrl?: string;
+    popunderIntervalSeconds?: number;
+    popunderMaxOpens?: number;
   }) => {
     const normalized = {
       ...nextSettings,
@@ -543,6 +552,8 @@ export default function Home() {
             primaryColor?: string;
             fontName?: string;
             fontUrl?: string;
+            popunderIntervalSeconds?: number;
+            popunderMaxOpens?: number;
           };
           applySiteSettings({
             ...parsed,
@@ -664,10 +675,12 @@ export default function Home() {
     window.addEventListener('focus', handleFocus);
     window.addEventListener('featureFlagsUpdated', handleCustomUpdate);
     document.addEventListener('visibilitychange', handleVisibility);
+    const intervalId = window.setInterval(loadFeatureFlags, 5000);
     return () => {
       window.removeEventListener('focus', handleFocus);
       window.removeEventListener('featureFlagsUpdated', handleCustomUpdate);
       document.removeEventListener('visibilitychange', handleVisibility);
+      window.clearInterval(intervalId);
     };
   }, []);
 
@@ -817,6 +830,8 @@ export default function Home() {
         primaryColor?: string;
         fontName?: string;
         fontUrl?: string;
+        popunderIntervalSeconds?: number;
+        popunderMaxOpens?: number;
       };
       applySiteSettings(parsed);
     } catch (error) {
@@ -1075,16 +1090,41 @@ export default function Home() {
   const bottomAds = ads.filter((ad) => ad.position === 'home-bottom');
   const popunderAd = ads.find((ad) => ad.position === 'popunder-legal' && ad.linkUrl);
 
+  const tryOpenPopunder = (trigger: string) => {
+    if (!popunderAd || !featureFlags.mainAds) return;
+    const intervalSeconds = siteSettings?.popunderIntervalSeconds ?? 300;
+    const maxOpens = siteSettings?.popunderMaxOpens ?? 3;
+    const now = Date.now();
+    const lastOpen = popunderLastOpenRef.current;
+    const openCount = popunderOpenCountRef.current;
+    if (openCount >= maxOpens) return;
+    if (lastOpen && now - lastOpen < intervalSeconds * 1000) return;
+    if (popunderShownRef.current) return;
+    popunderShownRef.current = true;
+    popunderLastOpenRef.current = now;
+    popunderOpenCountRef.current = openCount + 1;
+    sessionStorage.setItem(POPUNDER_LAST_OPEN_KEY, String(now));
+    sessionStorage.setItem(POPUNDER_OPEN_COUNT_KEY, String(popunderOpenCountRef.current));
+    window.open(popunderAd.linkUrl || '#', '_blank', 'noopener,noreferrer');
+    console.info('Popunder opened from', trigger);
+    window.setTimeout(() => {
+      popunderShownRef.current = false;
+    }, 500);
+  };
+
   useEffect(() => {
-    if (!popunderAd || popunderShownRef.current || !featureFlags.mainAds) return;
-    const handlePopunder = () => {
-      if (popunderShownRef.current) return;
-      popunderShownRef.current = true;
-      window.open(popunderAd.linkUrl || '#', '_blank', 'noopener,noreferrer');
-    };
-    document.addEventListener('pointerdown', handlePopunder, { once: true });
+    const storedLast = sessionStorage.getItem(POPUNDER_LAST_OPEN_KEY);
+    const storedCount = sessionStorage.getItem(POPUNDER_OPEN_COUNT_KEY);
+    if (storedLast) popunderLastOpenRef.current = Number(storedLast);
+    if (storedCount) popunderOpenCountRef.current = Number(storedCount);
+  }, []);
+
+  useEffect(() => {
+    if (!popunderAd || !featureFlags.mainAds) return;
+    const handlePopunder = () => tryOpenPopunder('pointer');
+    document.addEventListener('pointerdown', handlePopunder);
     return () => document.removeEventListener('pointerdown', handlePopunder);
-  }, [featureFlags.mainAds, popunderAd]);
+  }, [featureFlags.mainAds, popunderAd, siteSettings?.popunderIntervalSeconds, siteSettings?.popunderMaxOpens]);
 
   const fetchFavoriteLists = async (ownerKey: string) => {
     try {

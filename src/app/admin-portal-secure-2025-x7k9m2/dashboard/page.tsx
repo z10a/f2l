@@ -249,6 +249,8 @@ interface SiteSettings {
   fontName?: string;
   fontUrl?: string;
   title?: string;
+  popunderIntervalSeconds?: number;
+  popunderMaxOpens?: number;
 }
 
 const WEBSITE_SETTINGS_KEY = 'websiteSettings';
@@ -413,6 +415,8 @@ export default function AdminDashboard() {
     defaultTheme: 'dark',
     faviconUrl: '',
     appIconUrl: '',
+    popunderIntervalSeconds: 300,
+    popunderMaxOpens: 3,
   });
   const [autoScalingConfig, setAutoScalingConfig] = useState({
     minServers: 2,
@@ -1838,14 +1842,10 @@ export default function AdminDashboard() {
       toast.error('أدخل رابط الإعلان لإعلان Popunder');
       return;
     }
-    if (adForm.position.startsWith('stream-') && !adForm.streamId) {
-      toast.error('اختر قناة للإعلان داخل صفحة البث');
-      return;
-    }
     try {
       const payload = {
         ...adForm,
-        streamId: adForm.streamId || null,
+        streamId: adForm.position.startsWith('stream-') ? null : adForm.streamId || null,
       };
       const response = await fetch('/api/ads', {
         method: 'POST',
@@ -1875,15 +1875,11 @@ export default function AdminDashboard() {
       toast.error('أدخل رابط الإعلان لإعلان Popunder');
       return;
     }
-    if (adForm.position.startsWith('stream-') && !adForm.streamId) {
-      toast.error('اختر قناة للإعلان داخل صفحة البث');
-      return;
-    }
     try {
       const payload = {
         id: editingAd.id,
         ...adForm,
-        streamId: adForm.streamId || null,
+        streamId: adForm.position.startsWith('stream-') ? null : adForm.streamId || null,
       };
       const response = await fetch('/api/ads', {
         method: 'PUT',
@@ -4224,6 +4220,36 @@ export default function AdminDashboard() {
                             />
                           </div>
                           <div className="space-y-2">
+                            <Label className="text-slate-300">فاصل Popunder (بالثواني)</Label>
+                            <Input
+                              type="number"
+                              min={10}
+                              value={siteSettings.popunderIntervalSeconds ?? 300}
+                              onChange={(e) =>
+                                setSiteSettings({
+                                  ...siteSettings,
+                                  popunderIntervalSeconds: Number(e.target.value),
+                                })
+                              }
+                              className="bg-slate-800 border-slate-700 text-white"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label className="text-slate-300">حد مرات Popunder</Label>
+                            <Input
+                              type="number"
+                              min={1}
+                              value={siteSettings.popunderMaxOpens ?? 3}
+                              onChange={(e) =>
+                                setSiteSettings({
+                                  ...siteSettings,
+                                  popunderMaxOpens: Number(e.target.value),
+                                })
+                              }
+                              className="bg-slate-800 border-slate-700 text-white"
+                            />
+                          </div>
+                          <div className="space-y-2">
                             <Label className="text-slate-300">الثيم الافتراضي</Label>
                             <select
                               value={siteSettings.defaultTheme}
@@ -4444,7 +4470,7 @@ export default function AdminDashboard() {
                                   setAdForm((prev) => ({
                                     ...prev,
                                     position: nextPosition,
-                                    streamId: nextPosition.startsWith('stream-') ? prev.streamId : '',
+                                    streamId: nextPosition.startsWith('stream-') ? '' : prev.streamId,
                                   }));
                                 }}
                                 className="w-full bg-slate-800 border-slate-700 text-white rounded-md p-2"
@@ -4458,26 +4484,9 @@ export default function AdminDashboard() {
                               </select>
                             </div>
                             {adForm.position.startsWith('stream-') && (
-                              <div className="space-y-2">
-                                <Label className="text-slate-300">القناة المستهدفة</Label>
-                                <select
-                                  value={adForm.streamId}
-                                  onChange={(e) =>
-                                    setAdForm({ ...adForm, streamId: e.target.value })
-                                  }
-                                  className="w-full bg-slate-800 border-slate-700 text-white rounded-md p-2"
-                                >
-                                  <option value="">اختر قناة</option>
-                                  {streams.map((stream) => (
-                                    <option key={stream.id} value={stream.id}>
-                                      {stream.title}
-                                    </option>
-                                  ))}
-                                </select>
-                                <p className="text-xs text-slate-500">
-                                  اختر قناة حتى يظهر الإعلان داخل صفحة البث.
-                                </p>
-                              </div>
+                              <p className="text-xs text-slate-500">
+                                سيتم تطبيق الإعلان على جميع القنوات في صفحة البث.
+                              </p>
                             )}
                             <div className="space-y-2">
                               <Label className="text-slate-300">العنوان</Label>
